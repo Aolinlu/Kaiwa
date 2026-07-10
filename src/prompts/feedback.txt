@@ -1,0 +1,9 @@
+Summarize the conversation.
+Output JSON:
+{
+  "score": 82,
+  "good": ["用得好的地方"],
+  "improve": ["需要改进的地方"],
+  "grammar": ["涉及的语法点"],
+  "vocabulary": ["学到的词汇"]
+}
