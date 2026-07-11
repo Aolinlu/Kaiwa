@@ -1,16 +1,16 @@
 export class ChatMessage {
-  constructor(role, content, translation = null, reading = null, audioBase64 = null) {
-    this.role = role // 'user' | 'assistant'
+  constructor(role, content, translation = null, reading = null, audioBase64 = null, userText = null) {
+    this.role = role
     this.content = content
     this.translation = translation
     this.reading = reading
-    this.audioBase64 = audioBase64 // For user audio
+    this.audioBase64 = audioBase64
+    this.userText = userText
     this.timestamp = Date.now()
   }
 
   toApiFormat() {
     if (this.role === 'user') {
-      // If we have audio, send it as audio content
       if (this.audioBase64) {
         return {
           role: 'user',
@@ -31,11 +31,14 @@ export class ChatMessage {
     }
     return {
       role: 'assistant',
-      content: JSON.stringify({
-        reply: this.content,
-        translation: this.translation,
-        reading: this.reading
-      })
+      content: this.content
     }
+  }
+
+  toHistoryText() {
+    if (this.role === 'user') {
+      return `User: ${this.userText || this.content}`
+    }
+    return `AI: ${this.content}`
   }
 }
