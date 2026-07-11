@@ -103,167 +103,208 @@ Output JSON only:
   "stages_completed": ["completed_stage1", "completed_stage2"]
 }`
 
-function buildSystemPrompt(difficulty) {
-  return SYSTEM_PROMPT_TEMPLATE.replace('{{difficulty}}', difficulty)
+function buildSystemPrompt (difficulty) {
+    return SYSTEM_PROMPT_TEMPLATE.replace('{{difficulty}}', difficulty)
 }
 
-function buildSceneContext(scenario, currentState) {
-  const stageGuide = buildStageGuide(scenario.stages)
-  let context = `Scenario: ${scenario.title} (${scenario.titleCn})\n`
-  context += `Difficulty: ${scenario.difficulty}\n`
-  context += `Goal: ${scenario.goal}\n`
-  context += `NPC: ${scenario.npc}\n`
-  context += `Current Stage: ${currentState}\n\n`
-  context += `Stage Guide:\n${stageGuide}`
-  return context
+function buildSceneContext (scenario, currentState) {
+    const stageGuide = buildStageGuide(scenario.stages)
+    let context = `Scenario: ${scenario.title} (${scenario.titleCn})\n`
+    context += `Difficulty: ${scenario.difficulty}\n`
+    context += `Goal: ${scenario.goal}\n`
+    context += `NPC: ${scenario.npc}\n`
+    context += `Current Stage: ${currentState}\n\n`
+    context += `Stage Guide:\n${stageGuide}`
+    return context
 }
 
-function buildConversationHistory(messages) {
-  return messages
-    .filter(msg => msg.userText || msg.role === 'assistant')
-    .map(msg => msg.toHistoryText())
-    .join('\n')
+function buildConversationHistory (messages) {
+    return messages
+        .filter(msg => msg.userText || msg.role === 'assistant')
+        .map(msg => msg.toHistoryText())
+        .join('\n')
 }
 
-function buildEvalPrompt(scenario, currentState, recentContext) {
-  let prompt = EVAL_PROMPT_TEMPLATE
-    .replace('{{title}}', scenario.title)
-    .replace('{{titleCn}}', scenario.titleCn)
-    .replace('{{difficulty}}', scenario.difficulty)
-    .replace('{{currentState}}', currentState)
-    .replace('{{recentContext}}', recentContext)
-  return prompt
+function buildEvalPrompt (scenario, currentState, recentContext) {
+    let prompt = EVAL_PROMPT_TEMPLATE
+        .replace('{{title}}', scenario.title)
+        .replace('{{titleCn}}', scenario.titleCn)
+        .replace('{{difficulty}}', scenario.difficulty)
+        .replace('{{currentState}}', currentState)
+        .replace('{{recentContext}}', recentContext)
+    return prompt
 }
 
-function buildSummaryPrompt(scenario, evaluations) {
-  let prompt = SUMMARY_PROMPT_TEMPLATE
-    .replace('{{title}}', scenario.title)
-    .replace('{{titleCn}}', scenario.titleCn)
-    .replace('{{difficulty}}', scenario.difficulty)
-    .replace('{{evaluations}}', JSON.stringify(evaluations, null, 2))
-  return prompt
+function buildSummaryPrompt (scenario, evaluations) {
+    let prompt = SUMMARY_PROMPT_TEMPLATE
+        .replace('{{title}}', scenario.title)
+        .replace('{{titleCn}}', scenario.titleCn)
+        .replace('{{difficulty}}', scenario.difficulty)
+        .replace('{{evaluations}}', JSON.stringify(evaluations, null, 2))
+    return prompt
 }
 
 export class LLMFormatError extends Error {
-  constructor(message) {
-    super(message)
-    this.name = 'LLMFormatError'
-  }
+    constructor(message) {
+        super(message)
+        this.name = 'LLMFormatError'
+    }
+}
+
+function formatMessagesForLog (messages) {
+    return messages.map(m => {
+        if (Array.isArray(m.content)) {
+            return { role: m.role, content: '[audio data]' }
+        }
+        if (m.role === 'system' && m.content.length > 200) {
+            return { role: m.role, content: m.content.slice(0, 200) + '...' }
+        }
+        return m
+    })
 }
 
 export class LLMService {
-  static async startSession(scenario) {
-    const systemPrompt = buildSystemPrompt(scenario.difficulty)
-    const sceneContext = buildSceneContext(scenario, 'greeting')
+    static async startSession (scenario) {
+        console.log(`[LLM] startSession: ${scenario.title} (${scenario.difficulty})`)
 
-    const messages = [
-      { role: 'system', content: `${systemPrompt}\n\n${sceneContext}\n\nStart the conversation with a natural greeting based on the scenario. The greeting field in the scenario is: "${scenario.greeting}"` }
-    ]
+        const systemPrompt = buildSystemPrompt(scenario.difficulty)
+        const sceneContext = buildSceneContext(scenario, 'greeting')
 
-    const data = await this._callAPI(messages)
-    return ChatResponse.fromJson(data)
-  }
-
-  static async sendMessage(audioBase64, scenario, currentState, conversationMessages) {
-    const systemPrompt = buildSystemPrompt(scenario.difficulty)
-    const sceneContext = buildSceneContext(scenario, currentState)
-    const history = buildConversationHistory(conversationMessages)
-
-    const messages = [
-      { role: 'system', content: `${systemPrompt}\n\n${sceneContext}\n\nConversation History:\n${history}` },
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'input_audio',
-            input_audio: {
-              data: audioBase64
-            }
-          }
+        const messages = [
+            { role: 'system', content: `${systemPrompt}\n\n${sceneContext}\n\nStart the conversation with a natural greeting based on the scenario. The greeting field in the scenario is: "${scenario.greeting}"` }
         ]
-      }
-    ]
 
-    const maxRetries = 2
-    for (let i = 0; i < maxRetries; i++) {
-      try {
+        console.log('[LLM] startSession messages:', formatMessagesForLog(messages))
         const data = await this._callAPI(messages)
-        const response = ChatResponse.fromJson(data)
-
-        if (!response.reply || response.reply.trim() === '') {
-          throw new LLMFormatError('Empty reply field')
-        }
-
-        return response
-      } catch (e) {
-        if (e instanceof LLMFormatError && i < maxRetries - 1) {
-          console.warn(`LLM format error, retrying (${i + 1}/${maxRetries}):`, e.message)
-          continue
-        }
-        throw e
-      }
+        console.log('[LLM] startSession response:', data)
+        return ChatResponse.fromJson(data)
     }
-  }
 
-  static async evaluateMessage(audioBase64, scenario, currentState, conversationMessages) {
-    const recentContext = conversationMessages
-      .slice(-4)
-      .map(msg => msg.toHistoryText())
-      .join('\n')
+    static async sendMessage (audioBase64, scenario, currentState, conversationMessages) {
+        console.log(`[LLM] sendMessage: stage=${currentState}, history=${conversationMessages.length} msgs`)
 
-    const evalPrompt = buildEvalPrompt(scenario, currentState, recentContext)
+        const systemPrompt = buildSystemPrompt(scenario.difficulty)
+        const sceneContext = buildSceneContext(scenario, currentState)
+        const history = buildConversationHistory(conversationMessages)
 
-    const messages = [
-      { role: 'system', content: evalPrompt },
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'input_audio',
-            input_audio: {
-              data: audioBase64
+        console.log('[LLM] sendMessage history:', history)
+
+        const messages = [
+            { role: 'system', content: `${systemPrompt}\n\n${sceneContext}\n\nConversation History:\n${history}` },
+            {
+                role: 'user',
+                content: [
+                    {
+                        type: 'input_audio',
+                        input_audio: {
+                            data: audioBase64
+                        }
+                    }
+                ]
             }
-          }
         ]
-      }
-    ]
 
-    const data = await this._callAPI(messages)
-    // Return raw data here; ConversationPage handles wrapping into SentenceEvaluation
-    // because it needs turnIndex and audioBase64 which aren't available in the service.
-    return data
-  }
+        const maxRetries = 2
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                const data = await this._callAPI(messages)
+                console.log('[LLM] sendMessage response:', data)
+                const response = ChatResponse.fromJson(data)
 
-  static async getSummary(scenario, evaluations) {
-    const summaryPrompt = buildSummaryPrompt(scenario, evaluations)
+                if (!response.reply || response.reply.trim() === '') {
+                    throw new LLMFormatError('Empty reply field')
+                }
 
-    const messages = [
-      { role: 'system', content: summaryPrompt }
-    ]
-
-    const data = await this._callAPI(messages)
-    return data
-  }
-
-  static async _callAPI(messages) {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${API_CONFIG.API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: API_CONFIG.MODEL,
-        messages: messages,
-        response_format: { type: 'json_object' }
-      })
-    })
-
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`)
+                return response
+            } catch (e) {
+                if (e instanceof LLMFormatError && i < maxRetries - 1) {
+                    console.warn(`[LLM] sendMessage format error, retrying (${i + 1}/${maxRetries}):`, e.message)
+                    continue
+                }
+                throw e
+            }
+        }
     }
 
-    const data = await response.json()
-    return JSON.parse(data.choices[0].message.content)
-  }
+    static async evaluateMessage (audioBase64, scenario, currentState, conversationMessages) {
+        console.log(`[LLM] evaluateMessage: stage=${currentState}`)
+
+        const recentContext = conversationMessages
+            .slice(-4)
+            .map(msg => msg.toHistoryText())
+            .join('\n')
+
+        const evalPrompt = buildEvalPrompt(scenario, currentState, recentContext)
+
+        const messages = [
+            { role: 'system', content: evalPrompt },
+            {
+                role: 'user',
+                content: [
+                    {
+                        type: 'input_audio',
+                        input_audio: {
+                            data: audioBase64
+                        }
+                    }
+                ]
+            }
+        ]
+
+        const data = await this._callAPI(messages)
+        console.log('[LLM] evaluateMessage response:', data)
+        // Return raw data here; ConversationPage handles wrapping into SentenceEvaluation
+        // because it needs turnIndex and audioBase64 which aren't available in the service.
+        return data
+    }
+
+    static async getSummary (scenario, evaluations) {
+        console.log(`[LLM] getSummary: ${scenario.title}, ${evaluations.length} evaluations`)
+
+        const summaryPrompt = buildSummaryPrompt(scenario, evaluations)
+
+        const messages = [
+            { role: 'system', content: summaryPrompt },
+            { role: 'user', content: '请根据以上评估数据生成学习总结。' }
+        ]
+
+        console.log('[LLM] getSummary system prompt length:', summaryPrompt.length)
+        const data = await this._callAPI(messages)
+        console.log('[LLM] getSummary response:', data)
+        return data
+    }
+
+    static async _callAPI (messages) {
+        console.log('[LLM] _callAPI: sending', messages.length, 'messages to', API_CONFIG.MODEL)
+        console.log('[LLM] _callAPI messages:', formatMessagesForLog(messages))
+
+        const response = await fetch(`${API_CONFIG.BASE_URL}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${API_CONFIG.API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: API_CONFIG.MODEL,
+                messages: messages,
+                response_format: { type: 'json_object' }
+            })
+        })
+
+        if (!response.ok) {
+            const errorText = await response.text()
+            console.error(`[LLM] _callAPI HTTP error: ${response.status}`, errorText)
+            throw new Error(`API error: ${response.status}`)
+        }
+
+        const data = await response.json()
+        console.log('[LLM] _callAPI raw response:', data)
+        const content = data.choices?.[0]?.message?.content
+        if (!content) {
+            console.error('[LLM] _callAPI empty content, full response:', data)
+            throw new LLMFormatError('Empty response from LLM')
+        }
+        console.log('[LLM] _callAPI content string:', content)
+        return JSON.parse(content)
+    }
 }

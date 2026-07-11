@@ -216,7 +216,16 @@ async function finishConversation() {
   errorMessage.value = null
 
   try {
-    const summaryData = await LLMService.getSummary(props.scenario, sentenceEvaluations.value)
+    const evalsForSummary = sentenceEvaluations.value.map(e => ({
+      turnIndex: e.turnIndex,
+      userText: e.userText,
+      grammar: e.grammar,
+      pronunciation: e.pronunciation,
+      vocabulary: e.vocabulary,
+      naturalness: e.naturalness,
+      overall: e.overall
+    }))
+    const summaryData = await LLMService.getSummary(props.scenario, evalsForSummary)
     feedbackData.value = FeedbackResponse.fromJson(summaryData)
     showFeedback.value = true
   } catch (error) {
