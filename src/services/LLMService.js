@@ -1,57 +1,176 @@
 import { API_CONFIG } from '../config/api.js'
-import { ChatResponse, FeedbackResponse } from '../models/ChatResponse.js'
+import { ChatResponse } from '../models/ChatResponse.js'
+import { buildStageGuide } from '../config/scenarios.js'
 
-const SYSTEM_PROMPT = `You are a Japanese conversation partner at a convenience store.
-The user is a beginner learning Japanese.
+const SYSTEM_PROMPT_TEMPLATE = `You are a Japanese conversation partner for a beginner learner.
 
 Rules:
-- 尽量只使用 JLPT N5 vocabulary.
+- Use vocabulary appropriate for {{difficulty}} level.
 - Maximum 20 words per sentence.
-- Ask only one question at a time.
-- Don't explain grammar.
-- Keep the conversation natural.
-- If the user makes mistakes, continue chatting naturally.
-- Give corrections only when the conversation ends.
-- IMPORTANT: The "reply" field is REQUIRED and must NEVER be empty. Always provide a Japanese response in the "reply" field.
-- IMPORTANT: The "hint" object should contain a COMPLETE SUGGESTED REPLY for the user to say next. This is NOT your reply, but a full example answer the user can read aloud. Include the Japanese text, hiragana reading, and Chinese translation.
+- Ask only ONE question at a time.
+- Ask NARROW questions (choices, yes/no), NOT open-ended questions.
+- Always guide the learner toward an answerable response.
+- Don't explain grammar during conversation.
+- If the user makes mistakes, continue naturally.
+- Keep replies natural and conversational.
+- You MUST transcribe what the user said in user_text and user_reading.
+- You MUST include stage_hint to indicate conversation progress.
+- Set "end" to true when all success criteria have been met and the conversation has naturally concluded.
 
 Output JSON only:
 {
-  "reply": "Your Japanese response to the user (REQUIRED, never empty)",
-  "translation": "Chinese translation of your reply",
-  "reading": "Hiragana reading of your reply",
+  "reply": "Your Japanese response",
+  "translation": "Chinese translation of reply",
+  "reading": "Hiragana reading of reply",
+  "user_text": "Transcription of what the user said in Japanese",
+  "user_reading": "Hiragana reading of user's words",
   "hint": {
-    "text": "Complete suggested reply in Japanese (e.g., 'コーヒーをください。')",
-    "reading": "Hiragana reading of the suggested reply (e.g., 'コーヒーをください。')",
-    "translation": "Chinese translation of the suggested reply (e.g., '请给我咖啡。')"
+    "idea": "中文思路提示 (what the user should express)",
+    "keywords": ["keyword1", "keyword2", "keyword3"],
+    "sentence": "Complete example sentence in Japanese",
+    "sentence_reading": "Hiragana reading of example sentence",
+    "sentence_translation": "Chinese translation of example sentence"
   },
+  "stage_hint": "current_stage_name",
   "end": false
 }`
 
-const FEEDBACK_PROMPT = `You are a Japanese language teacher. Review the conversation and provide feedback.
+const EVAL_PROMPT_TEMPLATE = `You are a Japanese language evaluator. Analyze this audio utterance carefully.
 
-Analyze the conversation between the AI assistant and the user. The user is a beginner learning Japanese.
+Scenario: {{title}} ({{titleCn}})
+Difficulty: {{difficulty}}
+Current Stage: {{currentState}}
 
-Provide feedback in this exact JSON format:
+Recent Conversation Context:
+{{recentContext}}
+
+Evaluate the user's Japanese utterance based on the audio. Consider grammar accuracy, pronunciation quality, vocabulary appropriateness, and naturalness.
+
+Output JSON only:
 {
-  "score": 85,
-  "good": ["Specific things the user did well, like using polite expressions correctly"],
-  "improve": ["Specific areas for improvement, like pronunciation or grammar points"],
-  "grammar": ["Grammar patterns used in the conversation"],
-  "vocabulary": ["Key vocabulary words from the conversation"]
+  "user_text": "Transcription of what the user said in Japanese",
+  "grammar": {
+    "score": 0,
+    "errors": ["specific error descriptions in Chinese"],
+    "correct": ["what was done correctly in Chinese"]
+  },
+  "pronunciation": {
+    "score": 0,
+    "issues": ["specific pronunciation issues in Chinese"],
+    "good": ["good pronunciation points in Chinese"]
+  },
+  "vocabulary": {
+    "level_appropriate": true,
+    "new_words_used": ["word1", "word2"],
+    "suggestions": ["suggested improvements in Chinese"]
+  },
+  "naturalness": {
+    "score": 0,
+    "comment": "自然度评价 in Chinese"
+  },
+  "overall": 0
 }
 
-IMPORTANT: 
-- score should be between 0-100
-- Provide at least 1-2 items in each array
-- Be specific and helpful
-- Use Chinese for the feedback text`
+Scoring guide: 0-10 scale. 0-3 = poor, 4-6 = acceptable, 7-8 = good, 9-10 = excellent.`
+
+const SUMMARY_PROMPT_TEMPLATE = `Summarize the learner's performance based on these per-sentence evaluations.
+Each evaluation contains scores for grammar, pronunciation, vocabulary, and naturalness.
+
+Scenario: {{title}} ({{titleCn}})
+Difficulty: {{difficulty}}
+
+Evaluations:
+{{evaluations}}
+
+Provide a comprehensive summary that identifies trends, highlights improvement, and gives actionable advice. Use Chinese for all feedback text.
+
+Output JSON only:
+{
+  "score": 0,
+  "summary": "总体评价 (2-3 sentences)",
+  "grammar": {
+    "trend": "语法表现趋势",
+    "highlights": ["具体亮点1", "具体亮点2"]
+  },
+  "pronunciation": {
+    "trend": "发音表现趋势",
+    "highlights": ["具体亮点1", "具体亮点2"]
+  },
+  "vocabulary": {
+    "words_learned": ["学到的词汇1", "学到的词汇2"]
+  },
+  "improve": ["需要改进的地方1", "需要改进的地方2"],
+  "stages_completed": ["completed_stage1", "completed_stage2"]
+}`
+
+function buildSystemPrompt(difficulty) {
+  return SYSTEM_PROMPT_TEMPLATE.replace('{{difficulty}}', difficulty)
+}
+
+function buildSceneContext(scenario, currentState) {
+  const stageGuide = buildStageGuide(scenario.stages)
+  let context = `Scenario: ${scenario.title} (${scenario.titleCn})\n`
+  context += `Difficulty: ${scenario.difficulty}\n`
+  context += `Goal: ${scenario.goal}\n`
+  context += `NPC: ${scenario.npc}\n`
+  context += `Current Stage: ${currentState}\n\n`
+  context += `Stage Guide:\n${stageGuide}`
+  return context
+}
+
+function buildConversationHistory(messages) {
+  return messages
+    .filter(msg => msg.userText || msg.role === 'assistant')
+    .map(msg => msg.toHistoryText())
+    .join('\n')
+}
+
+function buildEvalPrompt(scenario, currentState, recentContext) {
+  let prompt = EVAL_PROMPT_TEMPLATE
+    .replace('{{title}}', scenario.title)
+    .replace('{{titleCn}}', scenario.titleCn)
+    .replace('{{difficulty}}', scenario.difficulty)
+    .replace('{{currentState}}', currentState)
+    .replace('{{recentContext}}', recentContext)
+  return prompt
+}
+
+function buildSummaryPrompt(scenario, evaluations) {
+  let prompt = SUMMARY_PROMPT_TEMPLATE
+    .replace('{{title}}', scenario.title)
+    .replace('{{titleCn}}', scenario.titleCn)
+    .replace('{{difficulty}}', scenario.difficulty)
+    .replace('{{evaluations}}', JSON.stringify(evaluations, null, 2))
+  return prompt
+}
+
+export class LLMFormatError extends Error {
+  constructor(message) {
+    super(message)
+    this.name = 'LLMFormatError'
+  }
+}
 
 export class LLMService {
-  static async sendMessage(audioBase64, conversationHistory = []) {
+  static async startSession(scenario) {
+    const systemPrompt = buildSystemPrompt(scenario.difficulty)
+    const sceneContext = buildSceneContext(scenario, 'greeting')
+
     const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      ...conversationHistory,
+      { role: 'system', content: `${systemPrompt}\n\n${sceneContext}\n\nStart the conversation with a natural greeting based on the scenario. The greeting field in the scenario is: "${scenario.greeting}"` }
+    ]
+
+    const data = await this._callAPI(messages)
+    return ChatResponse.fromJson(data)
+  }
+
+  static async sendMessage(audioBase64, scenario, currentState, conversationMessages) {
+    const systemPrompt = buildSystemPrompt(scenario.difficulty)
+    const sceneContext = buildSceneContext(scenario, currentState)
+    const history = buildConversationHistory(conversationMessages)
+
+    const messages = [
+      { role: 'system', content: `${systemPrompt}\n\n${sceneContext}\n\nConversation History:\n${history}` },
       {
         role: 'user',
         content: [
@@ -65,63 +184,84 @@ export class LLMService {
       }
     ]
 
-    try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${API_CONFIG.API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: API_CONFIG.MODEL,
-          messages: messages,
-          response_format: { type: 'json_object' }
-        })
-      })
+    const maxRetries = 2
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const data = await this._callAPI(messages)
+        const response = ChatResponse.fromJson(data)
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
+        if (!response.reply || response.reply.trim() === '') {
+          throw new LLMFormatError('Empty reply field')
+        }
+
+        return response
+      } catch (e) {
+        if (e instanceof LLMFormatError && i < maxRetries - 1) {
+          console.warn(`LLM format error, retrying (${i + 1}/${maxRetries}):`, e.message)
+          continue
+        }
+        throw e
       }
-
-      const data = await response.json()
-      const content = data.choices[0].message.content
-      return ChatResponse.fromJson(content)
-    } catch (error) {
-      console.error('LLM API error:', error)
-      throw error
     }
   }
 
-  static async getFeedback(conversationHistory) {
+  static async evaluateMessage(audioBase64, scenario, currentState, conversationMessages) {
+    const recentContext = conversationMessages
+      .slice(-4)
+      .map(msg => msg.toHistoryText())
+      .join('\n')
+
+    const evalPrompt = buildEvalPrompt(scenario, currentState, recentContext)
+
     const messages = [
-      { role: 'system', content: FEEDBACK_PROMPT },
-      ...conversationHistory
+      { role: 'system', content: evalPrompt },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'input_audio',
+            input_audio: {
+              data: audioBase64
+            }
+          }
+        ]
+      }
     ]
 
-    try {
-      const response = await fetch(`${API_CONFIG.BASE_URL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${API_CONFIG.API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: API_CONFIG.MODEL,
-          messages: messages,
-          response_format: { type: 'json_object' }
-        })
+    const data = await this._callAPI(messages)
+    return data
+  }
+
+  static async getSummary(scenario, evaluations) {
+    const summaryPrompt = buildSummaryPrompt(scenario, evaluations)
+
+    const messages = [
+      { role: 'system', content: summaryPrompt }
+    ]
+
+    const data = await this._callAPI(messages)
+    return data
+  }
+
+  static async _callAPI(messages) {
+    const response = await fetch(`${API_CONFIG.BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${API_CONFIG.API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: API_CONFIG.MODEL,
+        messages: messages,
+        response_format: { type: 'json_object' }
       })
+    })
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
-      }
-
-      const data = await response.json()
-      const content = data.choices[0].message.content
-      return FeedbackResponse.fromJson(content)
-    } catch (error) {
-      console.error('Feedback API error:', error)
-      throw error
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`)
     }
+
+    const data = await response.json()
+    return JSON.parse(data.choices[0].message.content)
   }
 }
