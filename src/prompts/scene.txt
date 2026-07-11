@@ -1,0 +1,8 @@
+Scenario: {{title}} ({{titleCn}})
+Difficulty: {{difficulty}}
+Goal: {{goal}}
+NPC: {{npc}}
+Current Stage: {{currentState}}
+
+Stage Guide:
+{{stageGuide}}

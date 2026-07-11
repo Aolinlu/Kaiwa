@@ -1,9 +1,29 @@
-Summarize the conversation.
-Output JSON:
+Summarize the learner's performance based on these per-sentence evaluations.
+Each evaluation contains scores for grammar, pronunciation, vocabulary, and naturalness.
+
+Scenario: {{title}} ({{titleCn}})
+Difficulty: {{difficulty}}
+
+Evaluations:
+{{evaluations}}
+
+Provide a comprehensive summary that identifies trends, highlights improvement, and gives actionable advice. Use Chinese for all feedback text.
+
+Output JSON only:
 {
-  "score": 82,
-  "good": ["用得好的地方"],
-  "improve": ["需要改进的地方"],
-  "grammar": ["涉及的语法点"],
-  "vocabulary": ["学到的词汇"]
+  "score": 0,
+  "summary": "总体评价 (2-3 sentences)",
+  "grammar": {
+    "trend": "语法表现趋势",
+    "highlights": ["具体亮点1", "具体亮点2"]
+  },
+  "pronunciation": {
+    "trend": "发音表现趋势",
+    "highlights": ["具体亮点1", "具体亮点2"]
+  },
+  "vocabulary": {
+    "words_learned": ["学到的词汇1", "学到的词汇2"]
+  },
+  "improve": ["需要改进的地方1", "需要改进的地方2"],
+  "stages_completed": ["completed_stage1", "completed_stage2"]
 }
