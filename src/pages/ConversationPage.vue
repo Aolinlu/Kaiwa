@@ -2,17 +2,26 @@
   <div class="min-h-screen bg-gray-50 flex flex-col">
     <!-- Header -->
     <header class="bg-white shadow-sm border-b border-gray-200 px-4 py-4">
-      <div class="text-center">
-        <div class="text-3xl mb-1">🏪</div>
-        <h1 class="text-xl font-bold text-gray-800">Convenience Store</h1>
-        <p class="text-sm text-gray-500">Japanese Conversation Practice</p>
+      <div class="flex items-center justify-between">
+        <button @click="$emit('finish')" class="text-gray-500 hover:text-gray-700">
+          ← 戻る
+        </button>
+        <div class="text-center">
+          <h1 class="text-xl font-bold text-gray-800">{{ scenario.title }}</h1>
+          <p class="text-sm text-gray-500">{{ scenario.titleCn }}</p>
+        </div>
+        <div class="w-12"></div>
+      </div>
+      <div class="flex justify-center mt-2">
+        <span class="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+          {{ currentState }}
+        </span>
       </div>
     </header>
 
     <!-- Chat Area -->
     <main class="flex-1 overflow-y-auto p-4">
       <div class="max-w-2xl mx-auto">
-        <!-- Messages -->
         <div class="space-y-4 mb-4">
           <ChatBubble
             v-for="(msg, index) in messages"
@@ -33,9 +42,11 @@
         <!-- Hint Card -->
         <HintCard
           v-if="currentHint"
-          :hint="currentHint.hint"
-          :reading="currentHint.reading"
-          :translation="currentHint.translation"
+          :idea="currentHint.idea"
+          :keywords="currentHint.keywords"
+          :sentence="currentHint.sentence"
+          :sentence-reading="currentHint.sentence_reading"
+          :sentence-translation="currentHint.sentence_translation"
         />
       </div>
     </main>
@@ -57,14 +68,14 @@
           </button>
           <button
             @click="finishConversation"
-            :disabled="isLoading || messages.length < 2"
+            :disabled="isLoading || messages.length < 4"
             class="w-16 h-16 rounded-full bg-red-500 text-white text-2xl flex items-center justify-center hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             🏁
           </button>
         </div>
         <div class="text-center text-sm text-gray-500 mt-2">
-          Hold 🎤 to speak • Tap 💡 for hint • Tap 🏁 to finish
+          Hold 🎤 to speak · Tap 💡 for hint · Tap 🏁 to finish
         </div>
       </div>
     </footer>
@@ -75,6 +86,14 @@
       :feedback="feedbackData"
       @close="closeFeedback"
     />
+
+    <!-- Error Toast -->
+    <ErrorToast
+      v-if="errorMessage"
+      :message="errorMessage"
+      @retry="retryLastAction"
+      @dismiss="errorMessage = null"
+    />
   </div>
 </template>
 
@@ -84,23 +103,34 @@ import ChatBubble from '../components/ChatBubble.vue'
 import VoiceButton from '../components/VoiceButton.vue'
 import HintCard from '../components/HintCard.vue'
 import FeedbackDialog from '../components/FeedbackDialog.vue'
-import { LLMService } from '../services/LLMService.js'
+import ErrorToast from '../components/ErrorToast.vue'
+import { LLMService, LLMFormatError } from '../services/LLMService.js'
 import { SpeechService } from '../services/SpeechService.js'
 import { ChatMessage } from '../models/ChatMessage.js'
-import { API_CONFIG } from '../config/api.js'
+import { SentenceEvaluation } from '../models/SentenceEvaluation.js'
+import { FeedbackResponse } from '../models/ChatResponse.js'
+import { convertToWav, blobToBase64 } from '../utils/audio.js'
+
+const props = defineProps({
+  scenario: {
+    type: Object,
+    required: true
+  }
+})
+
+const emit = defineEmits(['finish'])
 
 const messages = ref([])
 const isLoading = ref(false)
 const currentResponse = ref(null)
 const currentHint = ref(null)
+const currentState = ref('greeting')
+const sentenceEvaluations = ref([])
 const showFeedback = ref(false)
-const feedbackData = ref({
-  score: 0,
-  good: [],
-  improve: [],
-  grammar: [],
-  vocabulary: []
-})
+const feedbackData = ref(null)
+const errorMessage = ref(null)
+const lastAction = ref(null)
+const turnIndex = ref(0)
 
 onMounted(async () => {
   await startConversation()
@@ -109,67 +139,18 @@ onMounted(async () => {
 async function startConversation() {
   isLoading.value = true
   try {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${API_CONFIG.API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: API_CONFIG.MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: `You are a Japanese conversation partner at a convenience store. 
-The user is a beginner.
-
-Rules:
-- 尽量只使用 JLPT N5 vocabulary.
-- Maximum 20 words per sentence.
-- Ask only one question at a time.
-- Don't explain grammar.
-- Keep the conversation natural.
-- IMPORTANT: The "reply" field is REQUIRED and must NEVER be empty.
-- IMPORTANT: The "hint" object should contain a COMPLETE SUGGESTED REPLY for the user to say next.
-
-Start the conversation with a greeting and ask what the user would like.
-
-Output JSON only:
-{
-  "reply": "Your Japanese greeting (REQUIRED)",
-  "translation": "Chinese translation",
-  "reading": "Hiragana reading",
-  "hint": {
-    "text": "Suggested reply for user (e.g., 'コーヒーをください。')",
-    "reading": "Hiragana reading of suggested reply",
-    "translation": "Chinese translation of suggested reply"
-  },
-  "end": false
-}`
-          }
-        ],
-        response_format: { type: 'json_object' }
-      })
-    })
-
-    const data = await response.json()
-    const content = JSON.parse(data.choices[0].message.content)
-    
-    currentResponse.value = content
-    messages.value.push(new ChatMessage('assistant', content.reply, content.translation))
-    
-    await SpeechService.speak(content.reply)
+    const response = await LLMService.startSession(props.scenario)
+    currentResponse.value = response
+    messages.value.push(new ChatMessage('assistant', response.reply, response.translation))
+    await SpeechService.speak(response.reply)
   } catch (error) {
     console.error('Failed to start conversation:', error)
     const fallback = {
-      reply: 'いらっしゃいませ！',
-      translation: '欢迎光临！',
-      reading: 'いらっしゃいませ',
-      hint: {
-        text: 'こんにちは、コーヒーをください。',
-        reading: 'こんにちは、コーヒーをください。',
-        translation: '你好，请给我咖啡。'
-      },
+      reply: props.scenario.greeting,
+      translation: '',
+      reading: '',
+      hint: { idea: '', keywords: [], sentence: '', sentence_reading: '', sentence_translation: '' },
+      stage_hint: 'greeting',
       end: false
     }
     currentResponse.value = fallback
@@ -182,152 +163,110 @@ Output JSON only:
 async function handleRecording(audioBlob) {
   isLoading.value = true
   currentHint.value = null
-  
+  errorMessage.value = null
+
   try {
-    console.log('Audio blob size:', audioBlob.size, 'type:', audioBlob.type)
-    
-    // Convert to WAV format for MiMo API
     const wavBlob = await convertToWav(audioBlob)
-    console.log('WAV blob size:', wavBlob.size, 'type:', wavBlob.type)
-    
     const audioBase64 = await blobToBase64(wavBlob)
-    console.log('Base64 length:', audioBase64.length)
-    
-    const conversationHistory = messages.value.map(msg => msg.toApiFormat())
-    
-    const response = await LLMService.sendMessage(audioBase64, conversationHistory)
-    console.log('LLM response:', response)
-    
-    // Save user message with audio for feedback
-    messages.value.push(new ChatMessage('user', '🎤 Voice message', null, null, audioBase64))
-    
-    currentResponse.value = response
-    
-    // Handle empty reply - use hint if reply is empty
-    const replyText = response.reply || response.hint?.text || '...'
-    const translationText = response.translation || ''
-    
-    messages.value.push(new ChatMessage('assistant', replyText, translationText))
-    
-    if (replyText && replyText !== '...') {
-      await SpeechService.speak(replyText)
+
+    lastAction.value = { type: 'send', audioBase64 }
+
+    const [chatResponse, evalData] = await Promise.all([
+      LLMService.sendMessage(audioBase64, props.scenario, currentState.value, messages.value),
+      LLMService.evaluateMessage(audioBase64, props.scenario, currentState.value, messages.value)
+    ])
+
+    currentResponse.value = chatResponse
+
+    const userText = chatResponse.user_text || '🎤 Voice message'
+    messages.value.push(new ChatMessage('user', userText, null, null, audioBase64, userText))
+    messages.value.push(new ChatMessage('assistant', chatResponse.reply, chatResponse.translation))
+
+    if (chatResponse.stage_hint && chatResponse.stage_hint !== currentState.value) {
+      currentState.value = chatResponse.stage_hint
     }
+
+    const evaluation = SentenceEvaluation.fromJson(evalData, turnIndex.value, audioBase64)
+    sentenceEvaluations.value.push(evaluation)
+    turnIndex.value++
+
+    await SpeechService.speak(chatResponse.reply)
   } catch (error) {
     console.error('Failed to process recording:', error)
-    console.error('Error details:', error.message, error.stack)
-    alert('处理录音时出错: ' + error.message)
+    if (error instanceof LLMFormatError) {
+      errorMessage.value = 'AI 返回格式异常，请重试'
+    } else {
+      errorMessage.value = '处理录音时出错: ' + error.message
+    }
   } finally {
     isLoading.value = false
   }
 }
 
-async function convertToWav(audioBlob) {
-  const audioContext = new (window.AudioContext || window.webkitAudioContext)()
-  const arrayBuffer = await audioBlob.arrayBuffer()
-  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
-  
-  // Convert to WAV
-  const numberOfChannels = audioBuffer.numberOfChannels
-  const sampleRate = audioBuffer.sampleRate
-  const format = 1 // PCM
-  const bitDepth = 16
-  
-  let audioData
-  if (numberOfChannels === 2) {
-    const left = audioBuffer.getChannelData(0)
-    const right = audioBuffer.getChannelData(1)
-    audioData = interleave(left, right)
-  } else {
-    audioData = audioBuffer.getChannelData(0)
-  }
-  
-  const dataLength = audioData.length * (bitDepth / 8)
-  const buffer = new ArrayBuffer(44 + dataLength)
-  const view = new DataView(buffer)
-  
-  // WAV header
-  writeString(view, 0, 'RIFF')
-  view.setUint32(4, 36 + dataLength, true)
-  writeString(view, 8, 'WAVE')
-  writeString(view, 12, 'fmt ')
-  view.setUint32(16, 16, true)
-  view.setUint16(20, format, true)
-  view.setUint16(22, numberOfChannels, true)
-  view.setUint32(24, sampleRate, true)
-  view.setUint32(28, sampleRate * numberOfChannels * (bitDepth / 8), true)
-  view.setUint16(32, numberOfChannels * (bitDepth / 8), true)
-  view.setUint16(34, bitDepth, true)
-  writeString(view, 36, 'data')
-  view.setUint32(40, dataLength, true)
-  
-  // Write audio data
-  const offset = 44
-  for (let i = 0; i < audioData.length; i++) {
-    const sample = Math.max(-1, Math.min(1, audioData[i]))
-    view.setInt16(offset + i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true)
-  }
-  
-  return new Blob([buffer], { type: 'audio/wav' })
-}
-
-function interleave(left, right) {
-  const length = left.length + right.length
-  const result = new Float32Array(length)
-  let inputIndex = 0
-  for (let index = 0; index < length; ) {
-    result[index++] = left[inputIndex]
-    result[index++] = right[inputIndex]
-    inputIndex++
-  }
-  return result
-}
-
-function writeString(view, offset, string) {
-  for (let i = 0; i < string.length; i++) {
-    view.setUint8(offset + i, string.charCodeAt(i))
-  }
-}
-
 function showHint() {
-  console.log('showHint called')
-  console.log('currentResponse:', currentResponse.value)
-  console.log('hint:', currentResponse.value?.hint)
-  
-  if (currentResponse.value?.hint?.text) {
-    // Set currentHint with the structure expected by HintCard
-    currentHint.value = {
-      hint: currentResponse.value.hint.text,
-      reading: currentResponse.value.hint.reading,
-      translation: currentResponse.value.hint.translation
-    }
-    console.log('currentHint set:', currentHint.value)
+  if (currentResponse.value?.hint) {
+    currentHint.value = currentResponse.value.hint
   }
 }
 
 async function finishConversation() {
   isLoading.value = true
-  
+  errorMessage.value = null
+
   try {
-    // 直接使用对话历史（包含音频），让MiMo评估发音
-    const conversationHistory = messages.value.map(msg => msg.toApiFormat())
-    console.log('Conversation history for feedback:', conversationHistory)
-    
-    const feedback = await LLMService.getFeedback(conversationHistory)
-    console.log('Feedback response:', feedback)
-    
-    feedbackData.value = feedback
+    const summaryData = await LLMService.getSummary(props.scenario, sentenceEvaluations.value)
+    feedbackData.value = FeedbackResponse.fromJson(summaryData)
     showFeedback.value = true
   } catch (error) {
-    console.error('Failed to get feedback:', error)
-    console.error('Error details:', error.message, error.stack)
-    feedbackData.value = {
-      score: 70,
-      good: ['积极参与对话'],
-      improve: ['可以尝试更长的句子'],
-      grammar: [],
-      vocabulary: ['いらっしゃいませ', 'ください']
+    console.error('Failed to get summary:', error)
+    errorMessage.value = '获取反馈失败，请重试'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+function retryLastAction() {
+  errorMessage.value = null
+  if (lastAction.value?.type === 'send') {
+    const audioBase64 = lastAction.value.audioBase64
+    lastAction.value = null
+    handleRecordingFromBase64(audioBase64)
+  }
+}
+
+async function handleRecordingFromBase64(audioBase64) {
+  isLoading.value = true
+  currentHint.value = null
+  errorMessage.value = null
+
+  try {
+    const [chatResponse, evalData] = await Promise.all([
+      LLMService.sendMessage(audioBase64, props.scenario, currentState.value, messages.value),
+      LLMService.evaluateMessage(audioBase64, props.scenario, currentState.value, messages.value)
+    ])
+
+    currentResponse.value = chatResponse
+
+    const userText = chatResponse.user_text || '🎤 Voice message'
+    messages.value.push(new ChatMessage('user', userText, null, null, audioBase64, userText))
+    messages.value.push(new ChatMessage('assistant', chatResponse.reply, chatResponse.translation))
+
+    if (chatResponse.stage_hint && chatResponse.stage_hint !== currentState.value) {
+      currentState.value = chatResponse.stage_hint
     }
-    showFeedback.value = true
+
+    const evaluation = SentenceEvaluation.fromJson(evalData, turnIndex.value, audioBase64)
+    sentenceEvaluations.value.push(evaluation)
+    turnIndex.value++
+
+    await SpeechService.speak(chatResponse.reply)
+  } catch (error) {
+    console.error('Failed to process recording:', error)
+    if (error instanceof LLMFormatError) {
+      errorMessage.value = 'AI 返回格式异常，请重试'
+    } else {
+      errorMessage.value = '处理录音时出错: ' + error.message
+    }
   } finally {
     isLoading.value = false
   }
@@ -335,25 +274,6 @@ async function finishConversation() {
 
 function closeFeedback() {
   showFeedback.value = false
-  
-  // Reset conversation
-  messages.value = []
-  currentResponse.value = null
-  currentHint.value = null
-  
-  // Start new conversation
-  startConversation()
-}
-
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const base64 = reader.result.split(',')[1]
-      resolve(base64)
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
-  })
+  emit('finish')
 }
 </script>
