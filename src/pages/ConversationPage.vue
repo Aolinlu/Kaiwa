@@ -160,6 +160,29 @@ async function startConversation() {
   }
 }
 
+async function processAudio(audioBase64) {
+  const [chatResponse, evalData] = await Promise.all([
+    LLMService.sendMessage(audioBase64, props.scenario, currentState.value, messages.value),
+    LLMService.evaluateMessage(audioBase64, props.scenario, currentState.value, messages.value)
+  ])
+
+  currentResponse.value = chatResponse
+
+  const userText = chatResponse.user_text || '🎤 Voice message'
+  messages.value.push(new ChatMessage('user', userText, null, null, audioBase64, userText))
+  messages.value.push(new ChatMessage('assistant', chatResponse.reply, chatResponse.translation))
+
+  if (chatResponse.stage_hint && chatResponse.stage_hint !== currentState.value) {
+    currentState.value = chatResponse.stage_hint
+  }
+
+  const evaluation = SentenceEvaluation.fromJson(evalData, turnIndex.value, audioBase64)
+  sentenceEvaluations.value.push(evaluation)
+  turnIndex.value++
+
+  await SpeechService.speak(chatResponse.reply)
+}
+
 async function handleRecording(audioBlob) {
   isLoading.value = true
   currentHint.value = null
@@ -168,29 +191,8 @@ async function handleRecording(audioBlob) {
   try {
     const wavBlob = await convertToWav(audioBlob)
     const audioBase64 = await blobToBase64(wavBlob)
-
     lastAction.value = { type: 'send', audioBase64 }
-
-    const [chatResponse, evalData] = await Promise.all([
-      LLMService.sendMessage(audioBase64, props.scenario, currentState.value, messages.value),
-      LLMService.evaluateMessage(audioBase64, props.scenario, currentState.value, messages.value)
-    ])
-
-    currentResponse.value = chatResponse
-
-    const userText = chatResponse.user_text || '🎤 Voice message'
-    messages.value.push(new ChatMessage('user', userText, null, null, audioBase64, userText))
-    messages.value.push(new ChatMessage('assistant', chatResponse.reply, chatResponse.translation))
-
-    if (chatResponse.stage_hint && chatResponse.stage_hint !== currentState.value) {
-      currentState.value = chatResponse.stage_hint
-    }
-
-    const evaluation = SentenceEvaluation.fromJson(evalData, turnIndex.value, audioBase64)
-    sentenceEvaluations.value.push(evaluation)
-    turnIndex.value++
-
-    await SpeechService.speak(chatResponse.reply)
+    await processAudio(audioBase64)
   } catch (error) {
     console.error('Failed to process recording:', error)
     if (error instanceof LLMFormatError) {
@@ -240,26 +242,7 @@ async function handleRecordingFromBase64(audioBase64) {
   errorMessage.value = null
 
   try {
-    const [chatResponse, evalData] = await Promise.all([
-      LLMService.sendMessage(audioBase64, props.scenario, currentState.value, messages.value),
-      LLMService.evaluateMessage(audioBase64, props.scenario, currentState.value, messages.value)
-    ])
-
-    currentResponse.value = chatResponse
-
-    const userText = chatResponse.user_text || '🎤 Voice message'
-    messages.value.push(new ChatMessage('user', userText, null, null, audioBase64, userText))
-    messages.value.push(new ChatMessage('assistant', chatResponse.reply, chatResponse.translation))
-
-    if (chatResponse.stage_hint && chatResponse.stage_hint !== currentState.value) {
-      currentState.value = chatResponse.stage_hint
-    }
-
-    const evaluation = SentenceEvaluation.fromJson(evalData, turnIndex.value, audioBase64)
-    sentenceEvaluations.value.push(evaluation)
-    turnIndex.value++
-
-    await SpeechService.speak(chatResponse.reply)
+    await processAudio(audioBase64)
   } catch (error) {
     console.error('Failed to process recording:', error)
     if (error instanceof LLMFormatError) {

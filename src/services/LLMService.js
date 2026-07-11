@@ -229,6 +229,8 @@ export class LLMService {
     ]
 
     const data = await this._callAPI(messages)
+    // Return raw data here; ConversationPage handles wrapping into SentenceEvaluation
+    // because it needs turnIndex and audioBase64 which aren't available in the service.
     return data
   }
 

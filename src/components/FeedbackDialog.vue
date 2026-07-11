@@ -85,7 +85,7 @@ const props = defineProps({
       pronunciation: { trend: '', highlights: [] },
       vocabulary: { words_learned: [] },
       improve: [],
-      stages_completed: []
+      stagesCompleted: []
     })
   }
 })
