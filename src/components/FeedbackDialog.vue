@@ -94,7 +94,7 @@ defineEmits(['close'])
 
 const scoreStars = computed(() => {
   const score = props.feedback.score || 0
-  const filled = Math.round(score / 20)
+  const filled = Math.round(score / 2)
   return '⭐'.repeat(filled) + '☆'.repeat(5 - filled)
 })
 </script>
