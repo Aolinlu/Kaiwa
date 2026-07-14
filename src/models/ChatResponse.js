@@ -1,12 +1,9 @@
 export class ChatResponse {
-  constructor(reply, translation, reading, userText, userReading, hint, stageHint, end = false) {
+  constructor(reply, translation, reading, hint, end = false) {
     this.reply = reply
     this.translation = translation
     this.reading = reading
-    this.user_text = userText
-    this.user_reading = userReading
     this.hint = hint
-    this.stage_hint = stageHint
     this.end = end
   }
 
@@ -30,10 +27,7 @@ export class ChatResponse {
         data.reply || '',
         data.translation || '',
         data.reading || '',
-        data.user_text || '',
-        data.user_reading || '',
         hint,
-        data.stage_hint || '',
         data.end || false
       )
     } catch (e) {
@@ -41,23 +35,22 @@ export class ChatResponse {
       return new ChatResponse(
         'すみません、もう一度言ってください。',
         'Sorry, please say that again.',
-        '', '', '',
+        '',
         { idea: '', keywords: [], sentence: '', sentence_reading: '', sentence_translation: '' },
-        '', false
+        false
       )
     }
   }
 }
 
 export class FeedbackResponse {
-  constructor(score, summary, grammar, pronunciation, vocabulary, improve, stagesCompleted) {
+  constructor(score, summary, grammar, pronunciation, vocabulary, improve) {
     this.score = score || 0
     this.summary = summary || ''
     this.grammar = grammar || { trend: '', highlights: [] }
     this.pronunciation = pronunciation || { trend: '', highlights: [] }
     this.vocabulary = vocabulary || { words_learned: [] }
     this.improve = improve || []
-    this.stagesCompleted = stagesCompleted || []
   }
 
   static fromJson(json) {
@@ -69,12 +62,11 @@ export class FeedbackResponse {
         data.grammar,
         data.pronunciation,
         data.vocabulary,
-        data.improve,
-        data.stages_completed
+        data.improve
       )
     } catch (e) {
       console.error('Failed to parse FeedbackResponse:', e)
-      return new FeedbackResponse(0, '', {}, {}, {}, [], [])
+      return new FeedbackResponse(0, '', {}, {}, {}, [])
     }
   }
 }
