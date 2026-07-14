@@ -12,9 +12,15 @@
         </div>
         <div class="w-12"></div>
       </div>
-      <div class="flex justify-center mt-2">
-        <span class="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
-          {{ currentState }}
+      <!-- Mission Status -->
+      <div class="flex justify-center mt-2 gap-2">
+        <span
+          v-for="m in userMissionDisplay"
+          :key="m.id"
+          class="px-2 py-1 text-xs rounded-full"
+          :class="m.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
+        >
+          {{ m.title }}
         </span>
       </div>
     </header>
@@ -32,14 +38,12 @@
           />
         </div>
 
-        <!-- Loading indicator -->
         <div v-if="isLoading" class="flex justify-center mb-4">
           <div class="bg-white rounded-full px-4 py-2 shadow-sm border border-gray-200">
             <span class="animate-pulse">🤖 Thinking...</span>
           </div>
         </div>
 
-        <!-- Hint Card -->
         <HintCard
           v-if="currentHint"
           :idea="currentHint.idea"
@@ -61,14 +65,14 @@
           />
           <button
             @click="showHint"
-            :disabled="isLoading || !currentResponse?.hint"
+            :disabled="isLoading || !currentHintAvailable"
             class="w-16 h-16 rounded-full bg-orange-500 text-white text-2xl flex items-center justify-center hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             💡
           </button>
           <button
             @click="finishConversation"
-            :disabled="isLoading || messages.length < 4"
+            :disabled="isLoading"
             class="w-16 h-16 rounded-full bg-red-500 text-white text-2xl flex items-center justify-center hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             🏁
@@ -80,14 +84,12 @@
       </div>
     </footer>
 
-    <!-- Feedback Dialog -->
     <FeedbackDialog
       :show="showFeedback"
       :feedback="feedbackData"
       @close="closeFeedback"
     />
 
-    <!-- Error Toast -->
     <ErrorToast
       v-if="errorMessage"
       :message="errorMessage"
@@ -98,94 +100,150 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import ChatBubble from '../components/ChatBubble.vue'
 import VoiceButton from '../components/VoiceButton.vue'
 import HintCard from '../components/HintCard.vue'
 import FeedbackDialog from '../components/FeedbackDialog.vue'
 import ErrorToast from '../components/ErrorToast.vue'
-import { LLMService, LLMFormatError } from '../services/LLMService.js'
+import { TeacherService } from '../services/TeacherService.js'
+import { NPCService } from '../services/NPCService.js'
+import { JudgeService } from '../services/JudgeService.js'
 import { SpeechService } from '../services/SpeechService.js'
 import { ChatMessage } from '../models/ChatMessage.js'
+import { ChatResponse, FeedbackResponse } from '../models/ChatResponse.js'
 import { SentenceEvaluation } from '../models/SentenceEvaluation.js'
-import { FeedbackResponse } from '../models/ChatResponse.js'
+import { MissionRuntime } from '../models/MissionRuntime.js'
 import { convertToWav, blobToBase64 } from '../utils/audio.js'
+import { API_CONFIG } from '../config/api.js'
 
 const props = defineProps({
-  scenario: {
-    type: Object,
-    required: true
-  }
+  scenario: { type: Object, required: true }
 })
 
 const emit = defineEmits(['finish'])
 
 const messages = ref([])
 const isLoading = ref(false)
-const currentResponse = ref(null)
-const currentHint = ref(null)
-const currentState = ref('greeting')
+const currentHintData = ref(null)
+const missionRuntime = ref(null)
+const npcDescription = ref('')
 const sentenceEvaluations = ref([])
 const showFeedback = ref(false)
 const feedbackData = ref(null)
 const errorMessage = ref(null)
 const lastAction = ref(null)
 const turnIndex = ref(0)
+const allMissionsComplete = ref(false)
+
+const currentHintAvailable = computed(() => currentHintData.value !== null)
+const currentHint = computed(() => currentHintData.value)
+
+const userMissionDisplay = computed(() => {
+  if (!missionRuntime.value) return []
+  return missionRuntime.value.userMissions
+})
 
 onMounted(async () => {
   await startConversation()
 })
 
+function buildConversationHistory(msgs) {
+  return msgs
+    .filter(msg => msg.userText || msg.role === 'assistant')
+    .map(msg => msg.toHistoryText())
+    .join('\n')
+}
+
+function formatMissionContext(missions) {
+  return missions.map(m => `- [${m.status}] ${m.id}: ${m.title}`).join('\n')
+}
+
 async function startConversation() {
   isLoading.value = true
   try {
-    const response = await LLMService.startSession(props.scenario)
-    currentResponse.value = response
+    const { userMissions, npcMissions } = props.scenario.assignMissions()
+    missionRuntime.value = new MissionRuntime(userMissions, npcMissions)
+
+    npcDescription.value = props.scenario.selectNpc()
+
+    const npcMissionsStr = formatMissionContext(missionRuntime.value.npcMissions)
+    const userMissionsStr = formatMissionContext(missionRuntime.value.userMissions)
+
+    const npcData = await NPCService.getReply(
+      npcDescription.value,
+      props.scenario.scene.description,
+      props.scenario.difficulty,
+      npcMissionsStr,
+      userMissionsStr,
+      false,
+      '',
+      true
+    )
+
+    const response = ChatResponse.fromJson(npcData)
+    currentHintData.value = response.hint
     messages.value.push(new ChatMessage('assistant', response.reply, response.translation))
     await SpeechService.speak(response.reply)
   } catch (error) {
     console.error('Failed to start conversation:', error)
-    const fallback = {
-      reply: props.scenario.greeting,
-      translation: '',
-      reading: '',
-      hint: { idea: '', keywords: [], sentence: '', sentence_reading: '', sentence_translation: '' },
-      stage_hint: 'greeting',
-      end: false
-    }
-    currentResponse.value = fallback
-    messages.value.push(new ChatMessage('assistant', fallback.reply, fallback.translation))
+    messages.value.push(new ChatMessage('assistant', 'はじめまして！', '初次见面！'))
   } finally {
     isLoading.value = false
   }
 }
 
 async function processAudio(audioBase64) {
-  const [chatResponse, evalData] = await Promise.all([
-    LLMService.sendMessage(audioBase64, props.scenario, currentState.value, messages.value),
-    LLMService.evaluateMessage(audioBase64, props.scenario, currentState.value, messages.value)
-  ])
+  const teacherData = await TeacherService.evaluate(audioBase64, messages.value)
+  const userText = teacherData.user_text || teacherData.transcript || '🎤 Voice message'
 
-  currentResponse.value = chatResponse
+  const evaluation = SentenceEvaluation.fromJson(teacherData, turnIndex.value, audioBase64)
+  sentenceEvaluations.value.push(evaluation)
 
-  const userText = chatResponse.user_text || '🎤 Voice message'
   messages.value.push(new ChatMessage('user', userText, null, null, audioBase64, userText))
-  messages.value.push(new ChatMessage('assistant', chatResponse.reply, chatResponse.translation))
 
-  if (chatResponse.stage_hint && chatResponse.stage_hint !== currentState.value) {
-    currentState.value = chatResponse.stage_hint
+  const history = buildConversationHistory(messages.value)
+  const lastNpcMsg = messages.value.filter(m => m.role === 'assistant').pop()
+  const npcText = lastNpcMsg?.content || ''
+
+  try {
+    const updates = await JudgeService.evaluateMission(userText, npcText, missionRuntime.value)
+    missionRuntime.value.applyUpdates(updates)
+    allMissionsComplete.value = missionRuntime.value.allComplete()
+  } catch (error) {
+    console.warn('Judge evaluation failed, continuing:', error)
   }
 
-  const evaluation = SentenceEvaluation.fromJson(evalData, turnIndex.value, audioBase64)
-  sentenceEvaluations.value.push(evaluation)
+  const npcMissionsStr = formatMissionContext(missionRuntime.value.npcMissions)
+  const userMissionsStr = formatMissionContext(missionRuntime.value.userMissions)
+
+  const npcData = await NPCService.getReply(
+    npcDescription.value,
+    props.scenario.scene.description,
+    props.scenario.difficulty,
+    npcMissionsStr,
+    userMissionsStr,
+    allMissionsComplete.value,
+    history,
+    false
+  )
+
+  const response = ChatResponse.fromJson(npcData)
+  currentHintData.value = response.hint
+
+  messages.value.push(new ChatMessage('assistant', response.reply, response.translation))
   turnIndex.value++
 
-  await SpeechService.speak(chatResponse.reply)
+  await SpeechService.speak(response.reply)
+
+  if (response.end || allMissionsComplete.value) {
+    setTimeout(() => finishConversation(), 1000)
+  }
 }
 
 async function handleRecording(audioBlob) {
   isLoading.value = true
-  currentHint.value = null
+  currentHintData.value = null
   errorMessage.value = null
 
   try {
@@ -195,20 +253,14 @@ async function handleRecording(audioBlob) {
     await processAudio(audioBase64)
   } catch (error) {
     console.error('Failed to process recording:', error)
-    if (error instanceof LLMFormatError) {
-      errorMessage.value = 'AI 返回格式异常，请重试'
-    } else {
-      errorMessage.value = '处理录音时出错: ' + error.message
-    }
+    errorMessage.value = '处理录音时出错: ' + error.message
   } finally {
     isLoading.value = false
   }
 }
 
 function showHint() {
-  if (currentResponse.value?.hint) {
-    currentHint.value = currentResponse.value.hint
-  }
+  // Hint is already shown via currentHint computed
 }
 
 async function finishConversation() {
@@ -225,8 +277,30 @@ async function finishConversation() {
       naturalness: e.naturalness,
       overall: e.overall
     }))
-    const summaryData = await LLMService.getSummary(props.scenario, evalsForSummary)
-    feedbackData.value = FeedbackResponse.fromJson(summaryData)
+
+    const summaryPrompt = `Summarize the learner's performance based on these evaluations.
+Evaluations: ${JSON.stringify(evalsForSummary, null, 2)}
+Output JSON: { "score": 0, "summary": "总体评价", "grammar": { "trend": "", "highlights": [] }, "pronunciation": { "trend": "", "highlights": [] }, "vocabulary": { "words_learned": [] }, "improve": [] }`
+
+    const response = await fetch(`${API_CONFIG.BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${API_CONFIG.API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: API_CONFIG.MODEL,
+        messages: [
+          { role: 'system', content: summaryPrompt },
+          { role: 'user', content: '请生成学习总结。' }
+        ],
+        response_format: { type: 'json_object' }
+      })
+    })
+
+    const data = await response.json()
+    const content = JSON.parse(data.choices[0].message.content)
+    feedbackData.value = FeedbackResponse.fromJson(content)
     showFeedback.value = true
   } catch (error) {
     console.error('Failed to get summary:', error)
@@ -247,18 +321,12 @@ function retryLastAction() {
 
 async function handleRecordingFromBase64(audioBase64) {
   isLoading.value = true
-  currentHint.value = null
+  currentHintData.value = null
   errorMessage.value = null
-
   try {
     await processAudio(audioBase64)
   } catch (error) {
-    console.error('Failed to process recording:', error)
-    if (error instanceof LLMFormatError) {
-      errorMessage.value = 'AI 返回格式异常，请重试'
-    } else {
-      errorMessage.value = '处理录音时出错: ' + error.message
-    }
+    errorMessage.value = '处理录音时出错: ' + error.message
   } finally {
     isLoading.value = false
   }
