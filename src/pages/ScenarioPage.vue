@@ -20,7 +20,7 @@
             </span>
           </div>
           <p class="text-sm text-gray-500 mb-1">{{ scenario.titleCn }}</p>
-          <p class="text-sm text-gray-600">{{ scenario.goalCn }}</p>
+          <p class="text-sm text-gray-600">{{ scenario.scene.description }}</p>
         </button>
       </div>
     </div>
@@ -28,9 +28,22 @@
 </template>
 
 <script setup>
-import { SCENARIOS } from '../config/scenarios.js'
+import { ref, onMounted } from 'vue'
+import { Scenario } from '../models/Scenario.js'
 
 defineEmits(['select'])
 
-const scenarios = SCENARIOS
+const scenarios = ref([])
+
+async function loadScenarios() {
+  const modules = import.meta.glob('../courses/**/*.json', { eager: true })
+  const loaded = []
+  for (const path in modules) {
+    const data = modules[path].default || modules[path]
+    loaded.push(Scenario.fromJson(data))
+  }
+  scenarios.value = loaded
+}
+
+onMounted(loadScenarios)
 </script>
