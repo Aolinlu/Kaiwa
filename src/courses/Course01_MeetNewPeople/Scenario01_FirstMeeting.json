@@ -1,0 +1,25 @@
+{
+  "id": "first-meeting",
+  "title": "はじめまして！",
+  "titleCn": "初次见面！",
+  "difficulty": 1,
+  "scene": {
+    "title": "カフェで出会う",
+    "description": "你在一家咖啡店遇到了一位日本年轻人。你们坐在相邻的座位上，开始聊天。"
+  },
+  "npcPool": [
+    "我是田中太郎，25岁，在东京工作的程序员，喜欢打篮球和看电影。性格开朗，喜欢交朋友。",
+    "我是佐藤花子，22岁，京都大学的学生，喜欢画画和听音乐。性格温柔，说话比较慢。"
+  ],
+  "missions": [
+    { "id": "tell_name", "title": "告诉对方你的名字", "scope": "both" },
+    { "id": "ask_name", "title": "询问对方的名字", "scope": "both" },
+    { "id": "tell_hometown", "title": "告诉对方你的家乡", "scope": "both" },
+    { "id": "ask_hometown", "title": "询问对方的家乡", "scope": "both" },
+    { "id": "tell_hobby", "title": "告诉对方你的爱好", "scope": "both" },
+    { "id": "ask_hobby", "title": "询问对方的爱好", "scope": "both" },
+    { "id": "tell_work", "title": "告诉对方你的工作/学校", "scope": "user" },
+    { "id": "ask_work", "title": "询问对方的工作/学校", "scope": "npc" }
+  ],
+  "missionCount": [3, 4]
+}
