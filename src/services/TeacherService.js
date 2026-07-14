@@ -35,6 +35,8 @@ Do NOT care about missions, story, or NPC. Only evaluate language.`
 
 export class TeacherService {
   static async evaluate(audioBase64, conversationMessages) {
+    console.log(`[Teacher] evaluate: history=${conversationMessages.length} msgs`)
+
     const recentContext = conversationMessages
       .slice(-4)
       .map(msg => msg.toHistoryText())
@@ -52,11 +54,15 @@ export class TeacherService {
       }
     ]
 
+    console.log('[Teacher] sending request...')
     const data = await this._callAPI(messages)
+    console.log('[Teacher] response:', data)
     return data
   }
 
   static async _callAPI(messages) {
+    console.log('[Teacher] _callAPI: sending', messages.length, 'messages to', API_CONFIG.MODEL)
+
     const response = await fetch(`${API_CONFIG.BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -71,12 +77,18 @@ export class TeacherService {
     })
 
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`[Teacher] _callAPI HTTP error: ${response.status}`, errorText)
       throw new Error(`Teacher API error: ${response.status}`)
     }
 
     const data = await response.json()
     const content = data.choices?.[0]?.message?.content
-    if (!content) throw new Error('Empty Teacher response')
+    if (!content) {
+      console.error('[Teacher] _callAPI empty content, full response:', data)
+      throw new Error('Empty Teacher response')
+    }
+    console.log('[Teacher] _callAPI content string:', content)
     return JSON.parse(content)
   }
 }

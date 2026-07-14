@@ -48,6 +48,8 @@ Output JSON only:
 
 export class NPCService {
   static async getReply(npcDescription, sceneDescription, difficulty, npcMissions, userMissions, allComplete, history, isFirstMessage) {
+    console.log(`[NPC] getReply: isFirst=${isFirstMessage}, allComplete=${allComplete}, history=${history.length} chars`)
+
     let prompt = NPC_PROMPT
       .replace('{{npcDescription}}', npcDescription)
       .replace('{{sceneDescription}}', sceneDescription)
@@ -58,14 +60,23 @@ export class NPCService {
       .replace('{{history}}', history)
 
     if (isFirstMessage) {
-      prompt += '\n\nThis is the FIRST message. Generate a natural greeting that introduces yourself and guides the user to start talking. Do NOT use a generic greeting — make it specific to your missions.'
+      prompt += `\n\nIMPORTANT — FIRST MESSAGE RULES:
+- This is the FIRST message. Generate a natural greeting.
+- Introduce yourself briefly (just your name).
+- Do NOT reveal information that the user might want to ask about.
+- If the user has missions to ASK you something (like asking your hometown, work, hobby), do NOT volunteer that information — wait for the user to ask.
+- Ask ONE question to the user to get the conversation started.
+- Keep it short and natural.`
     }
+
+    console.log('[NPC] prompt length:', prompt.length)
 
     const messages = [
       { role: 'system', content: prompt },
       { role: 'user', content: isFirstMessage ? '开始对话。' : `User said: ${history.split('\n').pop()}` }
     ]
 
+    console.log('[NPC] sending request...')
     const maxRetries = 2
     for (let i = 0; i < maxRetries; i++) {
       try {
@@ -73,15 +84,21 @@ export class NPCService {
         if (!data.reply || data.reply.trim() === '') {
           throw new Error('Empty reply')
         }
+        console.log('[NPC] response:', data)
         return data
       } catch (e) {
-        if (i < maxRetries - 1) continue
+        if (i < maxRetries - 1) {
+          console.warn(`[NPC] retrying (${i + 1}/${maxRetries}):`, e.message)
+          continue
+        }
         throw e
       }
     }
   }
 
   static async _callAPI(messages) {
+    console.log('[NPC] _callAPI: sending', messages.length, 'messages to', API_CONFIG.MODEL)
+
     const response = await fetch(`${API_CONFIG.BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -96,12 +113,18 @@ export class NPCService {
     })
 
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`[NPC] _callAPI HTTP error: ${response.status}`, errorText)
       throw new Error(`NPC API error: ${response.status}`)
     }
 
     const data = await response.json()
     const content = data.choices?.[0]?.message?.content
-    if (!content) throw new Error('Empty NPC response')
+    if (!content) {
+      console.error('[NPC] _callAPI empty content, full response:', data)
+      throw new Error('Empty NPC response')
+    }
+    console.log('[NPC] _callAPI content string:', content)
     return JSON.parse(content)
   }
 }
