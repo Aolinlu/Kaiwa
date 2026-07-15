@@ -149,10 +149,20 @@ onMounted(async () => {
 })
 
 function buildConversationHistory(msgs) {
-  return msgs
+  // Exclude the last user message (it goes in "用户刚说的话" section)
+  const historyMsgs = msgs.slice(0, -1)
+  const historyObjects = historyMsgs
     .filter(msg => msg.userText || msg.role === 'assistant')
-    .map(msg => msg.toHistoryText())
-    .join('\n')
+    .map(msg => msg.toHistoryObject())
+  return JSON.stringify(historyObjects, null, 2)
+}
+
+function getLatestUserMessage(msgs) {
+  const lastMsg = msgs[msgs.length - 1]
+  if (lastMsg && lastMsg.role === 'user') {
+    return lastMsg.userText || lastMsg.content
+  }
+  return ''
 }
 
 function formatMissionContext(missions) {
@@ -165,18 +175,22 @@ async function startConversation() {
     const { userMissions, npcMissions } = props.scenario.assignMissions()
     missionRuntime.value = new MissionRuntime(userMissions, npcMissions)
 
-    npcDescription.value = props.scenario.selectNpc()
+    const npc = props.scenario.selectNpc()
+    npcDescription.value = npc
 
+    const npcIdentity = props.scenario.formatNpcIdentity(npc)
+    const npcName = npc.name
     const npcMissionsStr = formatMissionContext(missionRuntime.value.npcMissions)
     const userMissionsStr = formatMissionContext(missionRuntime.value.userMissions)
 
     const npcData = await NPCService.getReply(
-      npcDescription.value,
+      npcName,
+      npcIdentity,
       props.scenario.scene.description,
-      props.scenario.difficulty,
       npcMissionsStr,
       userMissionsStr,
       false,
+      '[]',
       '',
       true
     )
@@ -203,6 +217,7 @@ async function processAudio(audioBase64) {
   messages.value.push(new ChatMessage('user', userText, null, null, audioBase64, userText))
 
   const history = buildConversationHistory(messages.value)
+  const latestUserMessage = getLatestUserMessage(messages.value)
   const lastNpcMsg = messages.value.filter(m => m.role === 'assistant').pop()
   const npcText = lastNpcMsg?.content || ''
 
@@ -214,17 +229,20 @@ async function processAudio(audioBase64) {
     console.warn('Judge evaluation failed, continuing:', error)
   }
 
+  const npcIdentity = props.scenario.formatNpcIdentity(npcDescription.value)
+  const npcName = npcDescription.value.name
   const npcMissionsStr = formatMissionContext(missionRuntime.value.npcMissions)
   const userMissionsStr = formatMissionContext(missionRuntime.value.userMissions)
 
   const npcData = await NPCService.getReply(
-    npcDescription.value,
+    npcName,
+    npcIdentity,
     props.scenario.scene.description,
-    props.scenario.difficulty,
     npcMissionsStr,
     userMissionsStr,
     allMissionsComplete.value,
     history,
+    latestUserMessage,
     false
   )
 
