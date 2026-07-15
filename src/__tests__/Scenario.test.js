@@ -8,7 +8,10 @@ describe('Scenario', () => {
     titleCn: '初次见面！',
     difficulty: 1,
     scene: { title: 'カフェ', description: '咖啡店' },
-    npcPool: ['NPC 1', 'NPC 2'],
+    npcPool: [
+      { name: '田中太郎', age: 25, work: 'プログラマー', hobbies: ['バスケ'] },
+      { name: '佐藤花子', age: 22, work: '学生', hobbies: ['絵'] }
+    ],
     missions: [
       { id: 'tell_name', title: '告诉名字', scope: 'both' },
       { id: 'ask_name', title: '询问名字', scope: 'both' },
@@ -28,7 +31,18 @@ describe('Scenario', () => {
   it('selects a random NPC from pool', () => {
     const s = Scenario.fromJson(validJson)
     const npc = s.selectNpc()
-    expect(validJson.npcPool).toContain(npc)
+    expect(npc).toHaveProperty('name')
+    expect(npc).toHaveProperty('age')
+  })
+
+  it('formats NPC identity as structured text', () => {
+    const s = Scenario.fromJson(validJson)
+    const npc = { name: '田中太郎', age: 25, work: 'プログラマー', hobbies: ['バスケ', '映画'] }
+    const identity = s.formatNpcIdentity(npc)
+    expect(identity).toContain('- 名前：田中太郎')
+    expect(identity).toContain('- 年齢：25')
+    expect(identity).toContain('- 職業：プログラマー')
+    expect(identity).toContain('- 趣味：バスケ、映画')
   })
 
   it('assigns missions to user and npc', () => {

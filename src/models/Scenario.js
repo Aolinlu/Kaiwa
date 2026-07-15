@@ -29,6 +29,26 @@ export class Scenario {
     return this.npcPool[index]
   }
 
+  formatNpcIdentity(npc) {
+    const fieldLabels = {
+      name: '名前',
+      age: '年齢',
+      work: '職業',
+      hobbies: '趣味',
+      personality: '性格',
+      speakingStyle: '話し方',
+      background: '背景'
+    }
+
+    return Object.entries(npc)
+      .map(([key, value]) => {
+        const label = fieldLabels[key] || key
+        const formattedValue = Array.isArray(value) ? value.join('、') : value
+        return `- ${label}：${formattedValue}`
+      })
+      .join('\n')
+  }
+
   assignMissions() {
     const [min, max] = this.missionCount
     const count = min + Math.floor(Math.random() * (max - min + 1))
