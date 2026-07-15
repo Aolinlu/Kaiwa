@@ -41,4 +41,11 @@ export class ChatMessage {
     }
     return `AI: ${this.content}`
   }
+
+  toHistoryObject() {
+    return {
+      speaker: this.role === 'user' ? 'user' : 'npc',
+      message: this.role === 'user' ? (this.userText || this.content) : this.content
+    }
+  }
 }
