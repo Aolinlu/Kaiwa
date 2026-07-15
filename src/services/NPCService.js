@@ -1,79 +1,93 @@
 import { API_CONFIG } from '../config/api.js'
 
-const NPC_PROMPT = `You are {{npcDescription}}
+const NPC_PROMPT_TEMPLATE = `你是一个正在和日语初学者对话的人。
 
-You are having a natural conversation in Japanese with a beginner learner.
+## 你的身份
+{{npcIdentity}}
 
-Scene: {{sceneDescription}}
+你就是{{npcName}}。你不是 AI 助手，你是一个真实的人。
+和你对话的人是"用户"，不要把自己的名字和用户的名字搞混。
 
-Your missions:
+## 场景
+{{sceneDescription}}
+
+## 你的任务
 {{npcMissions}}
 
-User's missions (for your reference, to understand what the user is trying to do):
+## 用户的任务（仅供参考，不要主动帮用户完成）
 {{userMissions}}
 
-All missions complete: {{allComplete}}
+## 任务完成状态：{{allComplete}}
 
-Rules:
-1. NATURALNESS FIRST — always respond naturally to what the user said
-2. After responding, try to guide the conversation toward completing your missions
-3. Do NOT repeat things already said in the conversation
-4. If all missions are complete, wrap up the conversation naturally with a goodbye
-5. Keep replies short (max 20 sentences per reply)
-6. Use vocabulary appropriate for difficulty {{difficulty}} level
-7. Ask only ONE question at a time
-8. Ask NARROW questions (choices, yes/no), NOT open-ended questions
+## 规则
+1. 先自然回应用户说的话，然后再尝试引导完成自己的任务
+2. 不要重复已经说过的内容
+3. 如果所有任务都完成了，自然地结束对话
+4. 回复要简短，最多 2-3 句话
+5. 使用适合初学者的简单词汇
+6. 一次只问一个问题
+7. 问窄问题（选择题、是非题），不要问开放式问题
 
-Hint generation:
-- Generate a hint from the USER's perspective — help them figure out how to reply to your last message
-- The hint should be what the USER would say next, not what you would say
-
-Conversation history:
+## 对话历史
 {{history}}
 
-Output JSON only:
+## 用户刚说的话
+{{latestUserMessage}}
+
+## Hint 生成
+从用户的视角生成一个 hint，帮助用户想"怎么接你刚才那句话"。
+hint 是用户会说的话，不是你会说的话。
+
+请严格按以下 JSON 格式回复：
 {
-  "reply": "your Japanese response",
-  "translation": "Chinese translation of reply",
-  "reading": "Hiragana reading of reply",
+  "reply": "你的日语回复",
+  "translation": "中文翻译",
+  "reading": "平假名注音",
   "hint": {
-    "idea": "中文思路提示 — what the user should express next",
-    "keywords": ["keyword1", "keyword2"],
-    "sentence": "complete example sentence in Japanese that the user could say",
-    "sentence_reading": "Hiragana reading of example sentence",
-    "sentence_translation": "Chinese translation of example sentence"
+    "idea": "中文思路提示",
+    "keywords": ["关键词1", "关键词2"],
+    "sentence": "用户可以说的完整例句",
+    "sentence_reading": "例句的平假名注音",
+    "sentence_translation": "例句的中文翻译"
   },
   "end": false
-}`
+}
+
+---
+
+现在请你：
+1. 牢记你的身份设定
+2. 根据对话历史和用户刚说的话，生成一句自然的回复
+3. 严格按照上述 JSON 格式输出，不要输出其他内容`
+
+const FIRST_MESSAGE_ADDON = `
+
+这是对话的开始。请生成一句自然的开场白，介绍自己的名字，并向用户提一个问题来开始对话。
+不要透露用户想问你的信息。`
 
 export class NPCService {
-  static async getReply(npcDescription, sceneDescription, difficulty, npcMissions, userMissions, allComplete, history, isFirstMessage) {
-    console.log(`[NPC] getReply: isFirst=${isFirstMessage}, allComplete=${allComplete}, history=${history.length} chars`)
+  static async getReply(npcName, npcIdentity, sceneDescription, npcMissions, userMissions, allComplete, history, latestUserMessage, isFirstMessage) {
+    console.log(`[NPC] getReply: isFirst=${isFirstMessage}, allComplete=${allComplete}, npc=${npcName}`)
 
-    let prompt = NPC_PROMPT
-      .replace('{{npcDescription}}', npcDescription)
+    let prompt = NPC_PROMPT_TEMPLATE
+      .replace('{{npcIdentity}}', npcIdentity)
+      .replace('{{npcName}}', npcName)
       .replace('{{sceneDescription}}', sceneDescription)
-      .replace('{{difficulty}}', difficulty)
       .replace('{{npcMissions}}', npcMissions)
       .replace('{{userMissions}}', userMissions)
       .replace('{{allComplete}}', allComplete ? 'YES — wrap up the conversation' : 'NO — continue naturally')
       .replace('{{history}}', history)
+      .replace('{{latestUserMessage}}', latestUserMessage || '（对话刚开始）')
 
     if (isFirstMessage) {
-      prompt += `\n\nIMPORTANT — FIRST MESSAGE RULES:
-- This is the FIRST message. Generate a natural greeting.
-- Introduce yourself briefly (just your name).
-- Do NOT reveal information that the user might want to ask about.
-- If the user has missions to ASK you something (like asking your hometown, work, hobby), do NOT volunteer that information — wait for the user to ask.
-- Ask ONE question to the user to get the conversation started.
-- Keep it short and natural.`
+      prompt += FIRST_MESSAGE_ADDON
     }
 
     console.log('[NPC] prompt length:', prompt.length)
 
     const messages = [
       { role: 'system', content: prompt },
-      { role: 'user', content: isFirstMessage ? '开始对话。' : `User said: ${history.split('\n').pop()}` }
+      { role: 'user', content: '请根据以上设定生成回复。' }
     ]
 
     console.log('[NPC] sending request...')
