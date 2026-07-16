@@ -10,7 +10,11 @@ export default defineConfig({
         target: 'https://openspeech.bytedance.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/tts/, '/api/v3/tts')
-      }
+      },
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
     }
   }
 })

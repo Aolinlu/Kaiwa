@@ -16,3 +16,11 @@ docs/superpowers
 
 # Prisma generated
 **/src/generated
+
+# Server
+server/node_modules
+server/dist
+server/prisma/dev.db
+server/prisma/dev.db-journal
+server/storage/audio/
+server/.env
