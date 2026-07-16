@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum UserRole {
+  admin
+  user
+}
+
+enum SessionStatus {
+  in_progress
+  completed
+  abandoned
+}
+
+enum MissionSide {
+  user
+  npc
+}
+
+enum MissionStatus {
+  not_started
+  in_progress
+  completed
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      UserRole @default(user)
+  createdAt DateTime @default(now())
+  sessions  PracticeSession[]
+}
+
+model PracticeSession {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  courseId    String
+  scenarioId  String
+  npcName     String
+  status      SessionStatus @default(in_progress)
+  score       Float?
+  startedAt   DateTime      @default(now())
+  completedAt DateTime?
+
+  npcPromptVersion     String?
+  teacherPromptVersion String?
+  judgePromptVersion   String?
+
+  missions SessionMission[]
+  turns    ConversationTurn[]
+  report   LearningReport?
+  events   SessionEvent[]
+}
+
+model SessionMission {
+  id        String        @id @default(cuid())
+  sessionId String
+  session   PracticeSession @relation(fields: [sessionId], references: [id])
+  missionId String
+  side      MissionSide
+  title     String
+  status    MissionStatus @default(not_started)
+  note      String?
+}
+
+model ConversationTurn {
+  id        String @id @default(cuid())
+  sessionId String
+  session   PracticeSession @relation(fields: [sessionId], references: [id])
+  turnIndex Int
+
+  npcText        String
+  npcTranslation String?
+  npcReading     String?
+  npcAudioPath   String?
+
+  userText      String?
+  userAudioPath String?
+
+  grammarScore        Float?
+  grammarErrors       String?
+  pronunciationScore  Float?
+  pronunciationIssues String?
+  naturalnessScore    Float?
+  overallScore        Float?
+
+  createdAt DateTime @default(now())
+}
+
+model LearningReport {
+  id        String @id @default(cuid())
+  sessionId String @unique
+  session   PracticeSession @relation(fields: [sessionId], references: [id])
+
+  overallScore Float
+  summary      String
+
+  grammarTrend              String?
+  grammarHighlights         String?
+  pronunciationTrend        String?
+  pronunciationHighlights   String?
+
+  wordsLearned    String?
+  improvements    String?
+  nextSuggestions String?
+
+  createdAt DateTime @default(now())
+}
+
+model SessionEvent {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   PracticeSession @relation(fields: [sessionId], references: [id])
+  type      String
+  payload   String?
+  createdAt DateTime @default(now())
+}
