@@ -312,3 +312,81 @@ sessionRoutes.post('/:id/turns', async (c) => {
     },
   })
 })
+
+sessionRoutes.post('/:id/report', async (c) => {
+  const userId = c.get('userId')
+  const sessionId = c.req.param('id')
+
+  const session = await prisma.practiceSession.findFirst({
+    where: { id: sessionId, userId },
+    include: { turns: true, missions: true },
+  })
+
+  if (!session) {
+    return c.json({ error: 'Session not found', code: 'NOT_FOUND' }, 404)
+  }
+
+  const evalsForSummary = session.turns
+    .filter((t) => t.overallScore !== null)
+    .map((t) => ({
+      turnIndex: t.turnIndex,
+      userText: t.userText,
+      grammar: { score: t.grammarScore, errors: t.grammarErrors },
+      pronunciation: { score: t.pronunciationScore, issues: t.pronunciationIssues },
+      naturalness: { score: t.naturalnessScore },
+      overall: t.overallScore,
+    }))
+
+  const summaryPrompt = `Summarize the learner's performance based on these evaluations.
+Evaluations: ${JSON.stringify(evalsForSummary, null, 2)}
+Output JSON: {
+  "score": 0,
+  "summary": "总体评价",
+  "grammar": { "trend": "", "highlights": [] },
+  "pronunciation": { "trend": "", "highlights": [] },
+  "vocabulary": { "words_learned": [] },
+  "improve": [],
+  "next_suggestions": []
+}`
+
+  const { callLLM } = await import('../services/llm.js')
+  const content = await callLLM([
+    { role: 'system', content: summaryPrompt },
+    { role: 'user', content: '请生成学习总结。' },
+  ])
+  const summaryData = JSON.parse(content)
+
+  const report = await prisma.learningReport.upsert({
+    where: { sessionId },
+    update: {
+      overallScore: summaryData.score,
+      summary: summaryData.summary,
+      grammarTrend: summaryData.grammar?.trend,
+      grammarHighlights: JSON.stringify(summaryData.grammar?.highlights || []),
+      pronunciationTrend: summaryData.pronunciation?.trend,
+      pronunciationHighlights: JSON.stringify(summaryData.pronunciation?.highlights || []),
+      wordsLearned: JSON.stringify(summaryData.vocabulary?.words_learned || []),
+      improvements: JSON.stringify(summaryData.improve || []),
+      nextSuggestions: JSON.stringify(summaryData.next_suggestions || []),
+    },
+    create: {
+      sessionId,
+      overallScore: summaryData.score,
+      summary: summaryData.summary,
+      grammarTrend: summaryData.grammar?.trend,
+      grammarHighlights: JSON.stringify(summaryData.grammar?.highlights || []),
+      pronunciationTrend: summaryData.pronunciation?.trend,
+      pronunciationHighlights: JSON.stringify(summaryData.pronunciation?.highlights || []),
+      wordsLearned: JSON.stringify(summaryData.vocabulary?.words_learned || []),
+      improvements: JSON.stringify(summaryData.improve || []),
+      nextSuggestions: JSON.stringify(summaryData.next_suggestions || []),
+    },
+  })
+
+  await prisma.practiceSession.update({
+    where: { id: sessionId },
+    data: { status: 'completed', score: summaryData.score, completedAt: new Date() },
+  })
+
+  return c.json({ report })
+})
