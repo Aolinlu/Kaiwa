@@ -118,3 +118,197 @@ sessionRoutes.patch('/:id', async (c) => {
 
   return c.json({ session: updated })
 })
+
+sessionRoutes.post('/:id/start', async (c) => {
+  const userId = c.get('userId')
+  const sessionId = c.req.param('id')
+
+  const session = await prisma.practiceSession.findFirst({
+    where: { id: sessionId, userId },
+    include: { missions: true },
+  })
+
+  if (!session) {
+    return c.json({ error: 'Session not found', code: 'NOT_FOUND' }, 404)
+  }
+
+  const scenarioPath = `../../src/courses/${session.courseId}/${session.scenarioId}.json`
+  const scenario = await import(scenarioPath)
+  const scenarioData = scenario.default || scenario
+  const npc = scenarioData.npcPool.find((n: any) => n.name === session.npcName) || scenarioData.npcPool[0]
+
+  const npcIdentity = Object.entries(npc)
+    .map(([key, value]) => `- ${key}：${Array.isArray(value) ? value.join('、') : value}`)
+    .join('\n')
+
+  const npcMissionsStr = session.missions
+    .filter((m) => m.side === 'npc')
+    .map((m) => `- [${m.status}] ${m.id}: ${m.title}`)
+    .join('\n')
+
+  const userMissionsStr = session.missions
+    .filter((m) => m.side === 'user')
+    .map((m) => `- [${m.status}] ${m.id}: ${m.title}`)
+    .join('\n')
+
+  const { getNPCReply } = await import('../services/npc.js')
+
+  const npcReply = await getNPCReply({
+    npcName: npc.name,
+    npcIdentity,
+    sceneDescription: scenarioData.scene.description,
+    npcMissions: npcMissionsStr,
+    userMissions: userMissionsStr,
+    allComplete: false,
+    history: '[]',
+    latestUserMessage: '',
+    isFirstMessage: true,
+    sessionId,
+    turnIndex: 0,
+  })
+
+  const turn = await prisma.conversationTurn.create({
+    data: {
+      sessionId,
+      turnIndex: 0,
+      npcText: npcReply.reply,
+      npcTranslation: npcReply.translation,
+      npcReading: npcReply.reading,
+      npcAudioPath: npcReply.audioPath,
+    },
+  })
+
+  await prisma.sessionEvent.create({
+    data: { sessionId, type: 'conversation_started' },
+  })
+
+  return c.json({ turn, hint: npcReply.hint })
+})
+
+sessionRoutes.post('/:id/turns', async (c) => {
+  const userId = c.get('userId')
+  const sessionId = c.req.param('id')
+  const { userAudioBase64 } = await c.req.json()
+
+  const session = await prisma.practiceSession.findFirst({
+    where: { id: sessionId, userId },
+    include: { missions: true, turns: { orderBy: { turnIndex: 'desc' }, take: 1 } },
+  })
+
+  if (!session) {
+    return c.json({ error: 'Session not found', code: 'NOT_FOUND' }, 404)
+  }
+
+  const turnIndex = (session.turns[0]?.turnIndex ?? -1) + 1
+
+  const allTurns = await prisma.conversationTurn.findMany({
+    where: { sessionId },
+    orderBy: { turnIndex: 'asc' },
+  })
+  const history = JSON.stringify(
+    allTurns.map((t) => ({ role: 'assistant', content: t.npcText }))
+  )
+
+  const { StorageService } = await import('../services/storage.js')
+  let userAudioPath: string | null = null
+  if (userAudioBase64) {
+    const buffer = Buffer.from(userAudioBase64, 'base64')
+    userAudioPath = await StorageService.saveAudio(sessionId, `turn_${turnIndex}_user.wav`, buffer)
+  }
+
+  const { evaluateUserSpeech } = await import('../services/teacher.js')
+  const recentContext = allTurns.slice(-4).map((t) => `NPC: ${t.npcText}\nUser: ${t.userText || ''}`).join('\n')
+  const evaluation = await evaluateUserSpeech(userAudioBase64, recentContext)
+  const userText = evaluation.user_text || evaluation.transcript || '🎤 Voice message'
+
+  const { evaluateMissions } = await import('../services/judge.js')
+  const missionUpdates = await evaluateMissions(
+    userText,
+    allTurns[allTurns.length - 1]?.npcText || '',
+    session.missions
+  )
+
+  for (const update of missionUpdates) {
+    await prisma.sessionMission.updateMany({
+      where: { sessionId, missionId: update.id, side: update.side },
+      data: { status: update.status, note: update.note },
+    })
+  }
+
+  const updatedMissions = await prisma.sessionMission.findMany({ where: { sessionId } })
+  const allComplete = updatedMissions.every((m) => m.status === 'completed')
+
+  const scenarioPath = `../../src/courses/${session.courseId}/${session.scenarioId}.json`
+  const scenario = await import(scenarioPath)
+  const scenarioData = scenario.default || scenario
+  const npc = scenarioData.npcPool.find((n: any) => n.name === session.npcName) || scenarioData.npcPool[0]
+
+  const npcIdentity = Object.entries(npc)
+    .map(([key, value]) => `- ${key}：${Array.isArray(value) ? value.join('、') : value}`)
+    .join('\n')
+
+  const npcMissionsStr = updatedMissions
+    .filter((m) => m.side === 'npc')
+    .map((m) => `- [${m.status}] ${m.id}: ${m.title}`)
+    .join('\n')
+
+  const userMissionsStr = updatedMissions
+    .filter((m) => m.side === 'user')
+    .map((m) => `- [${m.status}] ${m.id}: ${m.title}`)
+    .join('\n')
+
+  const { getNPCReply } = await import('../services/npc.js')
+  const npcReply = await getNPCReply({
+    npcName: npc.name,
+    npcIdentity,
+    sceneDescription: scenarioData.scene.description,
+    npcMissions: npcMissionsStr,
+    userMissions: userMissionsStr,
+    allComplete,
+    history,
+    latestUserMessage: userText,
+    isFirstMessage: false,
+    sessionId,
+    turnIndex,
+  })
+
+  const turn = await prisma.conversationTurn.create({
+    data: {
+      sessionId,
+      turnIndex,
+      npcText: npcReply.reply,
+      npcTranslation: npcReply.translation,
+      npcReading: npcReply.reading,
+      npcAudioPath: npcReply.audioPath,
+      userText,
+      userAudioPath,
+      grammarScore: evaluation.grammar?.score,
+      grammarErrors: JSON.stringify(evaluation.grammar?.errors || []),
+      pronunciationScore: evaluation.pronunciation?.score,
+      pronunciationIssues: JSON.stringify(evaluation.pronunciation?.issues || []),
+      naturalnessScore: evaluation.naturalness?.score,
+      overallScore: evaluation.overall,
+    },
+  })
+
+  await prisma.sessionEvent.create({
+    data: {
+      sessionId,
+      type: 'turn_completed',
+      payload: JSON.stringify({ turnIndex, allComplete, missionUpdates }),
+    },
+  })
+
+  return c.json({
+    turn,
+    hint: npcReply.hint,
+    allComplete,
+    end: npcReply.end || false,
+    evaluation: {
+      grammar: evaluation.grammar,
+      pronunciation: evaluation.pronunciation,
+      naturalness: evaluation.naturalness,
+      overall: evaluation.overall,
+    },
+  })
+})
