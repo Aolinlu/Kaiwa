@@ -42,7 +42,7 @@ model User {
 model PracticeSession {
   id          String        @id @default(cuid())
   userId      String
-  user        User          @relation(fields: [userId], references: [id])
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   courseId    String
   scenarioId  String
   npcName     String
@@ -59,23 +59,28 @@ model PracticeSession {
   turns    ConversationTurn[]
   report   LearningReport?
   events   SessionEvent[]
+
+  @@index([userId])
 }
 
 model SessionMission {
   id        String        @id @default(cuid())
   sessionId String
-  session   PracticeSession @relation(fields: [sessionId], references: [id])
+  session   PracticeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   missionId String
   side      MissionSide
   title     String
   status    MissionStatus @default(not_started)
   note      String?
+
+  @@unique([sessionId, missionId])
+  @@index([sessionId])
 }
 
 model ConversationTurn {
   id        String @id @default(cuid())
   sessionId String
-  session   PracticeSession @relation(fields: [sessionId], references: [id])
+  session   PracticeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   turnIndex Int
 
   npcText        String
@@ -94,12 +99,15 @@ model ConversationTurn {
   overallScore        Float?
 
   createdAt DateTime @default(now())
+
+  @@unique([sessionId, turnIndex])
+  @@index([sessionId])
 }
 
 model LearningReport {
   id        String @id @default(cuid())
   sessionId String @unique
-  session   PracticeSession @relation(fields: [sessionId], references: [id])
+  session   PracticeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   overallScore Float
   summary      String
@@ -119,8 +127,10 @@ model LearningReport {
 model SessionEvent {
   id        String   @id @default(cuid())
   sessionId String
-  session   PracticeSession @relation(fields: [sessionId], references: [id])
+  session   PracticeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   type      String
   payload   String?
   createdAt DateTime @default(now())
+
+  @@index([sessionId])
 }
