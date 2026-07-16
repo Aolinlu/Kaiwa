@@ -1,15 +1,8 @@
-import 'dotenv/config'
 import { Hono } from 'hono'
 import bcrypt from 'bcryptjs'
 import { signToken } from '../utils/jwt.js'
 import { authMiddleware } from '../middleware/auth.js'
-import { PrismaClient } from '../generated/prisma/client'
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
-
-const adapter = new PrismaBetterSqlite3({
-  url: process.env.DATABASE_URL!,
-})
-const prisma = new PrismaClient({ adapter })
+import { prisma } from '../lib/prisma.js'
 
 export const authRoutes = new Hono()
 
@@ -20,7 +13,8 @@ authRoutes.post('/login', async (c) => {
     return c.json({ error: 'Email and password required', code: 'MISSING_FIELDS' }, 400)
   }
 
-  const user = await prisma.user.findUnique({ where: { email } })
+  const normalizedEmail = email.toLowerCase().trim()
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
   if (!user) {
     return c.json({ error: 'Invalid credentials', code: 'INVALID_CREDENTIALS' }, 401)
   }
