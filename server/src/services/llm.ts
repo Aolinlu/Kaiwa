@@ -7,6 +7,8 @@ const MIMO_CONFIG = {
 }
 
 export async function callLLM(messages: { role: string; content: string }[]): Promise<string> {
+  console.log(`[LLM] calling ${MIMO_CONFIG.MODEL}, messages=${messages.length}`)
+
   const response = await fetch(`${MIMO_CONFIG.BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: {

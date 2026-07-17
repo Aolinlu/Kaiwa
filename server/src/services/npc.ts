@@ -88,6 +88,8 @@ interface NPCInput {
 }
 
 export async function getNPCReply(input: NPCInput) {
+  console.log(`[NPC] getReply: npc=${input.npcName}, allComplete=${input.allComplete}, isFirst=${input.isFirstMessage}`)
+
   let prompt = NPC_PROMPT_TEMPLATE
     .replace('{{npcIdentity}}', input.npcIdentity)
     .replace('{{npcName}}', input.npcName)
@@ -107,6 +109,7 @@ export async function getNPCReply(input: NPCInput) {
   ])
 
   const parsed = JSON.parse(content)
+  console.log(`[NPC] response:`, parsed)
 
   let audioPath: string | null = null
   try {
@@ -115,8 +118,9 @@ export async function getNPCReply(input: NPCInput) {
       input.sessionId,
       `turn_${input.turnIndex}_npc.mp3`
     )
+    console.log(`[NPC] TTS saved: ${audioPath}`)
   } catch (e) {
-    console.error('TTS generation failed:', e)
+    console.error('[NPC] TTS failed:', e)
   }
 
   return {

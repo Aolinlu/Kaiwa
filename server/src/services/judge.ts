@@ -43,6 +43,9 @@ export async function evaluateMissions(
   npcText: string,
   missions: Mission[]
 ) {
+  console.log(`[Judge] evaluateMissions: user="${userText}", npc="${npcText}"`)
+  console.log(`[Judge] missions:`, missions.map((m) => `${m.id}(${m.side})=${m.status}`))
+
   const missionRuntime = missions
     .map((m) => `- [${m.status}] ${m.id} (${m.side}): ${m.title}`)
     .join('\n')
@@ -58,5 +61,6 @@ export async function evaluateMissions(
   ])
 
   const parsed = JSON.parse(content)
+  console.log(`[Judge] response:`, parsed)
   return parsed.missionUpdates || []
 }

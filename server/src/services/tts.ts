@@ -8,6 +8,8 @@ const TTS_CONFIG = {
 }
 
 export async function generateTTS(text: string, sessionId: string, filename: string): Promise<string> {
+  console.log(`[TTS] generate: "${text.substring(0, 50)}...", file=${filename}`)
+
   const requestId = crypto.randomUUID()
 
   const response = await fetch('https://openspeech.bytedance.com/api/v3/tts/unidirectional', {

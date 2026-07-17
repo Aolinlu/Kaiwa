@@ -34,6 +34,8 @@ Scoring guide: 0-10 scale. 0-3 = poor, 4-6 = acceptable, 7-8 = good, 9-10 = exce
 Do NOT care about missions, story, or NPC. Only evaluate language.`
 
 export async function evaluateUserSpeech(audioBase64: string, recentContext: string) {
+  console.log(`[Teacher] evaluate: context=${recentContext.length} chars`)
+
   const prompt = TEACHER_PROMPT.replace('{{recentContext}}', recentContext)
 
   const content = await callLLM([
@@ -46,5 +48,7 @@ export async function evaluateUserSpeech(audioBase64: string, recentContext: str
     },
   ])
 
-  return JSON.parse(content)
+  const parsed = JSON.parse(content)
+  console.log(`[Teacher] response:`, parsed)
+  return parsed
 }

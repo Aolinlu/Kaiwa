@@ -229,7 +229,7 @@ sessionRoutes.post('/:id/turns', async (c) => {
   const missionUpdates = await evaluateMissions(
     userText,
     allTurns[allTurns.length - 1]?.npcText || '',
-    session.missions
+    session.missions.map((m) => ({ id: m.missionId, side: m.side, title: m.title, status: m.status }))
   )
 
   for (const update of missionUpdates) {
