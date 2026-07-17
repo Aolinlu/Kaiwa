@@ -52,6 +52,14 @@ export async function generateTTS(text: string, sessionId: string, filename: str
     }
   }
 
+  // Process remaining buffer
+  if (buffer.trim()) {
+    try {
+      const data = JSON.parse(buffer)
+      if (data.data) chunks.push(data.data)
+    } catch {}
+  }
+
   if (chunks.length === 0) throw new Error('No audio data received')
 
   const base64Audio = chunks.join('')
