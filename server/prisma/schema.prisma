@@ -73,7 +73,7 @@ model SessionMission {
   status    MissionStatus @default(not_started)
   note      String?
 
-  @@unique([sessionId, missionId])
+  @@unique([sessionId, missionId, side])
   @@index([sessionId])
 }
 

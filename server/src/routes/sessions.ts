@@ -1,6 +1,12 @@
 import { Hono } from 'hono'
 import { authMiddleware } from '../middleware/auth.js'
 import { prisma } from '../lib/prisma.js'
+import { readFile } from 'fs/promises'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const SERVER_ROOT = resolve(__dirname, '..', '..')
 
 type Env = {
   Variables: {
@@ -40,9 +46,8 @@ sessionRoutes.post('/', async (c) => {
   const userId = c.get('userId')
   const { courseId, scenarioId } = await c.req.json()
 
-  const scenarioPath = `../../src/courses/${courseId}/${scenarioId}.json`
-  const scenarioModule = await import(scenarioPath)
-  const scenario = scenarioModule.default || scenarioModule
+  const scenarioPath = resolve(SERVER_ROOT, 'data', 'courses', courseId, `${scenarioId}.json`)
+  const scenario = JSON.parse(await readFile(scenarioPath, 'utf-8'))
 
   const npc = scenario.npcPool[Math.floor(Math.random() * scenario.npcPool.length)]
 
@@ -132,9 +137,8 @@ sessionRoutes.post('/:id/start', async (c) => {
     return c.json({ error: 'Session not found', code: 'NOT_FOUND' }, 404)
   }
 
-  const scenarioPath = `../../src/courses/${session.courseId}/${session.scenarioId}.json`
-  const scenario = await import(scenarioPath)
-  const scenarioData = scenario.default || scenario
+  const scenarioPath = resolve(SERVER_ROOT, 'data', 'courses', session.courseId, `${session.scenarioId}.json`)
+  const scenarioData = JSON.parse(await readFile(scenarioPath, 'utf-8'))
   const npc = scenarioData.npcPool.find((n: any) => n.name === session.npcName) || scenarioData.npcPool[0]
 
   const npcIdentity = Object.entries(npc)
@@ -238,9 +242,8 @@ sessionRoutes.post('/:id/turns', async (c) => {
   const updatedMissions = await prisma.sessionMission.findMany({ where: { sessionId } })
   const allComplete = updatedMissions.every((m) => m.status === 'completed')
 
-  const scenarioPath = `../../src/courses/${session.courseId}/${session.scenarioId}.json`
-  const scenario = await import(scenarioPath)
-  const scenarioData = scenario.default || scenario
+  const scenarioPath = resolve(SERVER_ROOT, 'data', 'courses', session.courseId, `${session.scenarioId}.json`)
+  const scenarioData = JSON.parse(await readFile(scenarioPath, 'utf-8'))
   const npc = scenarioData.npcPool.find((n: any) => n.name === session.npcName) || scenarioData.npcPool[0]
 
   const npcIdentity = Object.entries(npc)
