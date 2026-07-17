@@ -137,6 +137,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { convertToWav } from '../utils/audio.js'
 import { SessionService } from '../services/SessionService.js'
 import { SpeechService } from '../services/SpeechService.js'
 import VoiceButton from '../components/VoiceButton.vue'
@@ -218,7 +219,8 @@ async function handleRecording(audioBlob) {
   hintRevealLevel.value = 0
 
   try {
-    const base64 = await blobToBase64(audioBlob)
+    const wavBlob = await convertToWav(audioBlob)
+    const base64 = await blobToBase64(wavBlob)
     messages.value.push({ role: 'user', text: '🎤 録音中...' })
 
     const result = await SessionService.addTurn(sessionId, base64)

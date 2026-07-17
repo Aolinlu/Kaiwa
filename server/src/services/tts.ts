@@ -10,7 +10,7 @@ const TTS_CONFIG = {
 export async function generateTTS(text: string, sessionId: string, filename: string): Promise<string> {
   const requestId = crypto.randomUUID()
 
-  const response = await fetch('https://openspeech.bytedance.com/api/tts/unidirectional', {
+  const response = await fetch('https://openspeech.bytedance.com/api/v3/tts/unidirectional', {
     method: 'POST',
     headers: {
       'X-Api-Key': TTS_CONFIG.API_KEY,

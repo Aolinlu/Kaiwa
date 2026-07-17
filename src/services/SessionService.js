@@ -56,6 +56,6 @@ export class SessionService {
   }
 
   static getAudioUrl(sessionId, filename) {
-    return `${API_CONFIG.BASE_URL.replace('/api', '')}/audio/${sessionId}/${filename}`
+    return `${API_CONFIG.BASE_URL}/audio/${sessionId}/${filename}`
   }
 }
