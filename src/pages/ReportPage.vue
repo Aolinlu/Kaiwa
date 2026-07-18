@@ -101,24 +101,8 @@
             <h3 class="font-extrabold text-[#3c3c3c] mb-4">会話レビュー</h3>
             <div class="space-y-4">
               <div v-for="turn in session.turns" :key="turn.id" class="border-b border-[#e5e5e5] pb-4 last:border-0">
-                <!-- NPC -->
-                <div class="mb-3">
-                  <p class="text-xs text-[#777777] mb-1">{{ session.npcName }}</p>
-                  <div class="bg-[#f7f7f7] rounded-xl p-3">
-                    <p class="font-bold text-[#3c3c3c]">{{ turn.npcText }}</p>
-                    <p v-if="turn.npcTranslation" class="text-sm text-[#777777] mt-1">{{ turn.npcTranslation }}</p>
-                    <button
-                      v-if="turn.npcAudioPath"
-                      @click="playAudio(turn.npcAudioPath)"
-                      class="mt-2 text-sm text-[#1cb0f6] font-bold hover:underline"
-                    >
-                      ▶️ NPC音声
-                    </button>
-                  </div>
-                </div>
-
                 <!-- User -->
-                <div v-if="turn.userText">
+                <div v-if="turn.userText" class="mb-3">
                   <p class="text-xs text-[#777777] mb-1">あなた</p>
                   <div class="bg-[#dbf8c5] rounded-xl p-3">
                     <p class="font-bold text-[#3c3c3c]">{{ turn.userText }}</p>
@@ -172,6 +156,22 @@
                         </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                <!-- NPC -->
+                <div v-if="turn.npcText">
+                  <p class="text-xs text-[#777777] mb-1">{{ session.npcName }}</p>
+                  <div class="bg-[#f7f7f7] rounded-xl p-3">
+                    <p class="font-bold text-[#3c3c3c]">{{ turn.npcText }}</p>
+                    <p v-if="turn.npcTranslation" class="text-sm text-[#777777] mt-1">{{ turn.npcTranslation }}</p>
+                    <button
+                      v-if="turn.npcAudioPath"
+                      @click="playAudio(turn.npcAudioPath)"
+                      class="mt-2 text-sm text-[#1cb0f6] font-bold hover:underline"
+                    >
+                      ▶️ NPC音声
+                    </button>
                   </div>
                 </div>
               </div>
