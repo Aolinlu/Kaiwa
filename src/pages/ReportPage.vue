@@ -296,8 +296,16 @@ function playAudio(path) {
   SpeechService.playAudio(url)
 }
 
-function startNew() {
-  router.push('/conversation/new')
+async function startNew() {
+  try {
+    const { session: newSession } = await SessionService.createSession(
+      session.value.courseId,
+      session.value.scenarioId
+    )
+    router.push(`/conversation/${newSession.id}`)
+  } catch (error) {
+    console.error('Failed to start new practice:', error)
+  }
 }
 
 function goHome() {

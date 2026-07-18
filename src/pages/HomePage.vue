@@ -61,50 +61,65 @@
             <span class="text-xs tracking-widest text-sumi-500">COURSE</span>
           </div>
 
-          <div class="bg-white rounded-2xl border border-kinari-200 shadow-paper overflow-hidden">
-            <!-- Course header band -->
-            <div class="relative bg-ai-800 px-8 py-7 overflow-hidden">
-              <div class="absolute inset-0 bg-seigaiha text-ai-300 opacity-20"></div>
-              <div class="relative">
-                <p class="text-ai-200 text-xs tracking-[0.3em] mb-2">COURSE 01</p>
-                <h3 class="font-jserif text-2xl font-bold text-kinari-50 mb-1">初めての出会い</h3>
-                <p class="text-ai-200 text-sm">自己紹介と初対面の会話をマスターする</p>
-              </div>
-            </div>
+          <div v-if="!courses.length" class="bg-kinari-50 border border-dashed border-kinari-300 rounded-xl p-8 text-center">
+            <div class="bg-seigaiha text-kinari-300 h-10 mb-4 rounded"></div>
+            <p class="text-sumi-500 text-sm">コースを読み込み中…</p>
+          </div>
 
-            <!-- Progress -->
-            <div class="px-8 pt-6 pb-2">
-              <div class="flex items-baseline justify-between mb-2">
-                <p class="text-sm text-sumi-600">
-                  累計練習 <span class="font-jserif font-bold text-ai-700 text-lg">{{ sessions.length }}</span> 回
-                </p>
-                <p class="text-xs text-sumi-500">次の節目まであと {{ milestoneRemaining }} 回</p>
+          <div v-else class="space-y-6">
+            <div v-for="(course, ci) in courses" :key="course.id" class="bg-white rounded-2xl border border-kinari-200 shadow-paper overflow-hidden">
+              <!-- Course header band -->
+              <div class="relative bg-ai-800 px-8 py-7 overflow-hidden">
+                <div class="absolute inset-0 bg-seigaiha text-ai-300 opacity-20"></div>
+                <div class="relative">
+                  <p class="text-ai-200 text-xs tracking-[0.3em] mb-2">COURSE {{ String(ci + 1).padStart(2, '0') }}</p>
+                  <h3 class="font-jserif text-2xl font-bold text-kinari-50 mb-1">{{ course.title }}</h3>
+                  <p class="text-ai-200 text-sm">{{ course.description || course.titleCn }}</p>
+                </div>
               </div>
-              <div class="w-full bg-kinari-200 rounded-full h-2 overflow-hidden">
+
+              <!-- Progress（全体の練習量、暫定で最初のコースに表示） -->
+              <div v-if="ci === 0" class="px-8 pt-6 pb-2">
+                <div class="flex items-baseline justify-between mb-2">
+                  <p class="text-sm text-sumi-600">
+                    累計練習 <span class="font-jserif font-bold text-ai-700 text-lg">{{ sessions.length }}</span> 回
+                  </p>
+                  <p class="text-xs text-sumi-500">次の節目まであと {{ milestoneRemaining }} 回</p>
+                </div>
+                <div class="w-full bg-kinari-200 rounded-full h-2 overflow-hidden">
+                  <div
+                    class="h-full bg-gradient-to-r from-ai-500 to-ai-400 rounded-full transition-all duration-700"
+                    :style="{ width: milestoneProgress + '%' }"
+                  />
+                </div>
+              </div>
+
+              <!-- Scenario list -->
+              <div class="px-8 py-6 space-y-3">
+                <p class="text-xs tracking-widest text-sumi-500">シナリオ</p>
                 <div
-                  class="h-full bg-gradient-to-r from-ai-500 to-ai-400 rounded-full transition-all duration-700"
-                  :style="{ width: milestoneProgress + '%' }"
-                />
-              </div>
-            </div>
-
-            <!-- Scenario list -->
-            <div class="px-8 py-6">
-              <p class="text-xs tracking-widest text-sumi-500 mb-3">シナリオ</p>
-              <div
-                class="group flex items-center gap-5 rounded-xl border border-kinari-200 bg-kinari-50 px-6 py-5 cursor-pointer transition-all hover:border-ai-300 hover:shadow-paper-lg hover:-translate-y-0.5"
-                @click="startPractice"
-              >
-                <div class="w-12 h-12 rounded-full bg-ai-600 text-kinari-50 flex items-center justify-center font-jserif font-bold text-lg shadow-paper group-hover:bg-ai-500 transition-colors">
-                  一
+                  v-for="(sc, si) in course.scenarios"
+                  :key="sc.id"
+                  class="group flex items-center gap-5 rounded-xl border border-kinari-200 bg-kinari-50 px-6 py-5 cursor-pointer transition-all hover:border-ai-300 hover:shadow-paper-lg hover:-translate-y-0.5"
+                  @click="startScenario(course.id, sc.id)"
+                >
+                  <div class="w-12 h-12 rounded-full bg-ai-600 text-kinari-50 flex items-center justify-center font-jserif font-bold text-lg shadow-paper group-hover:bg-ai-500 transition-colors">
+                    {{ KANJI_NUMERALS[si] || si + 1 }}
+                  </div>
+                  <div class="flex-1">
+                    <h4 class="font-bold text-sumi-800 mb-0.5">
+                      {{ sc.title }}
+                      <span v-if="sc.difficulty" class="text-kin-500 text-xs ml-2">{{ '★'.repeat(sc.difficulty) }}</span>
+                    </h4>
+                    <p class="text-sm text-sumi-500">{{ sc.sceneTitle }}<span v-if="sc.titleCn"> · {{ sc.titleCn }}</span></p>
+                  </div>
+                  <button
+                    :disabled="starting"
+                    class="px-5 py-2.5 rounded-lg bg-ai-600 text-kinari-50 text-sm font-bold shadow-paper transition-all group-hover:bg-ai-500 group-hover:shadow-paper-lg disabled:opacity-50"
+                  >
+                    練習を始める →
+                  </button>
                 </div>
-                <div class="flex-1">
-                  <h4 class="font-bold text-sumi-800 mb-0.5">初対面の挨拶</h4>
-                  <p class="text-sm text-sumi-500">NPC と初めて会って、名前や出身の話をしましょう</p>
-                </div>
-                <button class="px-5 py-2.5 rounded-lg bg-ai-600 text-kinari-50 text-sm font-bold shadow-paper transition-all group-hover:bg-ai-500 group-hover:shadow-paper-lg">
-                  練習を始める →
-                </button>
               </div>
             </div>
           </div>
@@ -112,9 +127,40 @@
 
         <!-- History -->
         <section>
+          <!-- In progress -->
+          <div v-if="inProgressSessions.length" class="mb-8">
+            <div class="flex items-baseline justify-between mb-4">
+              <h2 class="font-jserif text-xl font-bold text-sumi-800">練習中</h2>
+              <span class="text-xs tracking-widest text-sumi-500">{{ inProgressSessions.length }} 件</span>
+            </div>
+            <div class="space-y-3">
+              <div
+                v-for="session in inProgressSessions"
+                :key="session.id"
+                class="group bg-white rounded-xl border-2 border-dashed border-ai-300 px-5 py-4 cursor-pointer transition-all hover:border-ai-500 hover:shadow-paper-lg hover:-translate-y-0.5"
+                @click="resumePractice(session.id)"
+              >
+                <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 rounded-full bg-ai-100 text-ai-600 flex items-center justify-center font-jserif font-bold flex-shrink-0">
+                    続
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="font-jserif text-sm text-sumi-500 mb-0.5">{{ formatDate(session.startedAt) }}</p>
+                    <p class="font-bold text-sumi-800 truncate">{{ session.npcName }} との会話</p>
+                    <p class="text-xs text-sumi-500 mt-0.5">
+                      {{ session._count?.turns ?? 0 }} ターン · ミッション {{ missionSummary(session) }}
+                    </p>
+                  </div>
+                  <span class="text-sm font-bold text-ai-600 group-hover:text-ai-500 whitespace-nowrap transition-colors">続きから →</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Completed -->
           <div class="flex items-baseline justify-between mb-4">
             <h2 class="font-jserif text-xl font-bold text-sumi-800">練習履歴</h2>
-            <span class="text-xs tracking-widest text-sumi-500">{{ sessions.length }} 件</span>
+            <span class="text-xs tracking-widest text-sumi-500">{{ completedSessions.length }} 件</span>
           </div>
 
           <div v-if="sessions.length === 0" class="bg-kinari-50 border border-dashed border-kinari-300 rounded-xl p-8 text-center">
@@ -124,7 +170,7 @@
 
           <div v-else class="space-y-3">
             <div
-              v-for="session in sessions"
+              v-for="session in completedSessions"
               :key="session.id"
               class="group bg-white rounded-xl border border-kinari-200 shadow-paper px-5 py-4 cursor-pointer transition-all hover:border-ai-300 hover:shadow-paper-lg hover:-translate-y-0.5"
               @click="viewReport(session.id)"
@@ -179,8 +225,14 @@ import { SessionService } from '../services/SessionService.js'
 const router = useRouter()
 const user = ref(AuthService.getCurrentUser())
 const sessions = ref([])
+const courses = ref([])
+const starting = ref(false)
 
 const WEEKDAYS_JP = ['日', '月', '火', '水', '木', '金', '土']
+const KANJI_NUMERALS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
+
+const inProgressSessions = computed(() => sessions.value.filter((s) => s.status !== 'completed'))
+const completedSessions = computed(() => sessions.value.filter((s) => s.status === 'completed'))
 
 const todayText = computed(() => {
   const d = new Date()
@@ -226,15 +278,32 @@ const stats = computed(() => [
 
 onMounted(async () => {
   try {
-    const data = await SessionService.listSessions()
-    sessions.value = data.sessions
+    const [coursesData, sessionsData] = await Promise.all([
+      SessionService.listCourses(),
+      SessionService.listSessions(),
+    ])
+    courses.value = coursesData
+    sessions.value = sessionsData.sessions
   } catch (error) {
-    console.error('Failed to load sessions:', error)
+    console.error('Failed to load home data:', error)
   }
 })
 
-function startPractice() {
-  router.push('/conversation/new')
+async function startScenario(courseId, scenarioId) {
+  if (starting.value) return
+  starting.value = true
+  try {
+    const { session } = await SessionService.createSession(courseId, scenarioId)
+    router.push(`/conversation/${session.id}`)
+  } catch (error) {
+    console.error('Failed to create session:', error)
+  } finally {
+    starting.value = false
+  }
+}
+
+function resumePractice(sessionId) {
+  router.push(`/conversation/${sessionId}`)
 }
 
 function viewReport(sessionId) {

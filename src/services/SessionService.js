@@ -1,6 +1,14 @@
 import { API_CONFIG, getAuthHeaders } from '../config/api.js'
 
 export class SessionService {
+  static async listCourses() {
+    const response = await fetch(`${API_CONFIG.BASE_URL}/courses`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to list courses')
+    return (await response.json()).courses
+  }
+
   static async createSession(courseId, scenarioId) {
     const response = await fetch(`${API_CONFIG.BASE_URL}/sessions`, {
       method: 'POST',

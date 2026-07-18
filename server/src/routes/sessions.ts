@@ -100,7 +100,17 @@ sessionRoutes.get('/:id', async (c) => {
     return c.json({ error: 'Session not found', code: 'NOT_FOUND' }, 404)
   }
 
-  return c.json({ session })
+  // Attach scenario metadata (title / scene) so clients can render without a second lookup
+  let scenario = null
+  try {
+    const scenarioPath = resolve(SERVER_ROOT, 'data', 'courses', session.courseId, `${session.scenarioId}.json`)
+    const data = JSON.parse(await readFile(scenarioPath, 'utf-8'))
+    scenario = { title: data.title, titleCn: data.titleCn || '', scene: data.scene || null }
+  } catch {
+    // scenario file missing — return session without it
+  }
+
+  return c.json({ session: { ...session, scenario } })
 })
 
 sessionRoutes.patch('/:id', async (c) => {

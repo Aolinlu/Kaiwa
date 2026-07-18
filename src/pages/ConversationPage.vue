@@ -116,7 +116,7 @@
                 <div class="flex items-center gap-2">
                   <p class="font-jserif font-bold flex-1">{{ msg.text }}</p>
                   <button
-                    v-if="msg.audioBase64"
+                    v-if="msg.audioBase64 || msg.audioUrl"
                     @click="playUserAudio(msg)"
                     class="w-8 h-8 rounded-full bg-white/20 text-kinari-50 flex items-center justify-center text-sm transition-all hover:bg-white/30"
                   >
@@ -321,37 +321,79 @@ const missionProgress = computed(() => {
 onMounted(async () => {
   try {
     isLoading.value = true
-    const { session, npc, scenario } = await SessionService.createSession(
-      'Course01_MeetNewPeople',
-      'Scenario01_FirstMeeting'
-    )
+    const id = route.params.id
+
+    // '/conversation/new' 已废弃：主页会先创建会话再跳转
+    if (!id || id === 'new') {
+      router.replace('/')
+      return
+    }
+
+    const session = await SessionService.getSession(id)
+
+    // 已完成的会话只能看报告，不能再继续
+    if (session.status === 'completed') {
+      router.replace(`/report/${session.id}`)
+      return
+    }
 
     sessionId = session.id
-    scenarioTitle.value = scenario.title
-    sceneTitle.value = scenario.scene?.title || ''
-    sceneDescription.value = scenario.scene?.description || ''
+    scenarioTitle.value = session.scenario?.title || ''
+    sceneTitle.value = session.scenario?.scene?.title || ''
+    sceneDescription.value = session.scenario?.scene?.description || ''
     missions.value = session.missions
 
-    const { turn, hint } = await SessionService.startSession(session.id)
+    if (session.turns.length === 0) {
+      // 新会话：NPC 开场白
+      const { turn, hint } = await SessionService.startSession(session.id)
+      messages.value.push({
+        role: 'assistant',
+        text: turn.npcText,
+        translation: turn.npcTranslation,
+        reading: turn.npcReading,
+        audioUrl: turn.npcAudioPath ? SessionService.getAudioUrl(session.id, turn.npcAudioPath.split('/').pop()) : null,
+        isPlaying: false,
+        progress: 0,
+        audioEnded: false,
+        showText: false,
+        showReading: false,
+        showTranslation: false,
+      })
+      currentHint.value = hint
 
-    messages.value.push({
-      role: 'assistant',
-      text: turn.npcText,
-      translation: turn.npcTranslation,
-      reading: turn.npcReading,
-      audioUrl: turn.npcAudioPath ? SessionService.getAudioUrl(session.id, turn.npcAudioPath.split('/').pop()) : null,
-      isPlaying: false,
-      progress: 0,
-      audioEnded: false,
-      showText: false,
-      showReading: false,
-      showTranslation: false,
-    })
-    currentHint.value = hint
-
-    // Auto-play first message
-    if (messages.value[0].audioUrl) {
-      playNpcAudio(messages.value[0])
+      // Auto-play first message
+      if (messages.value[0].audioUrl) {
+        playNpcAudio(messages.value[0])
+      }
+    } else {
+      // 断点续聊：把历史轮次重建为消息列表（user 在前，NPC 在后）
+      for (const t of session.turns) {
+        if (t.userText) {
+          messages.value.push({
+            role: 'user',
+            text: t.userText,
+            audioBase64: null,
+            audioUrl: t.userAudioPath ? SessionService.getAudioUrl(session.id, t.userAudioPath.split('/').pop()) : null,
+            isPlaying: false,
+          })
+        }
+        if (t.npcText) {
+          messages.value.push({
+            role: 'assistant',
+            text: t.npcText,
+            translation: t.npcTranslation,
+            reading: t.npcReading,
+            audioUrl: t.npcAudioPath ? SessionService.getAudioUrl(session.id, t.npcAudioPath.split('/').pop()) : null,
+            isPlaying: false,
+            progress: 0,
+            audioEnded: true,
+            showText: false,
+            showReading: false,
+            showTranslation: false,
+          })
+        }
+      }
+      turnCount.value = session.turns.filter((t) => t.userText).length
     }
   } catch (error) {
     console.error('Failed to start conversation:', error)
@@ -447,13 +489,19 @@ async function handleRecording(audioBlob) {
 }
 
 async function playUserAudio(msg) {
-  if (!msg.audioBase64) return
+  if (!msg.audioBase64 && !msg.audioUrl) return
   try {
     msg.isPlaying = true
-    const audio = new Audio(`data:audio/wav;base64,${msg.audioBase64}`)
-    audio.onended = () => { msg.isPlaying = false }
-    audio.onerror = () => { msg.isPlaying = false }
-    await audio.play()
+    if (msg.audioBase64) {
+      const audio = new Audio(`data:audio/wav;base64,${msg.audioBase64}`)
+      audio.onended = () => { msg.isPlaying = false }
+      audio.onerror = () => { msg.isPlaying = false }
+      await audio.play()
+    } else {
+      // 续聊恢复的消息没有 base64，走服务器音频
+      await SpeechService.playAudio(msg.audioUrl)
+      msg.isPlaying = false
+    }
   } catch (e) {
     msg.isPlaying = false
   }
