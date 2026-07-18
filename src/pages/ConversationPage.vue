@@ -74,7 +74,7 @@
         </div>
 
         <!-- Hint -->
-        <div v-if="currentHint" class="bg-[#fff4d6] border-2 border-[#ff9600] border-b-4 rounded-2xl p-4">
+        <div v-if="currentHint && hintVisible" class="bg-[#fff4d6] border-2 border-[#ff9600] border-b-4 rounded-2xl p-4">
           <div class="flex items-center gap-2 mb-2">
             <span class="text-xl">💡</span>
             <span class="font-extrabold text-[#cc7a00]">ヒント</span>
@@ -99,7 +99,7 @@
       <div class="max-w-2xl mx-auto flex justify-center gap-4">
         <VoiceButton :disabled="isLoading" @recording-complete="handleRecording" />
         <button
-          @click="hintRevealLevel = 1"
+          @click="hintVisible = true; hintRevealLevel = 1"
           :disabled="!currentHint"
           class="w-16 h-16 rounded-full bg-[#ff9600] text-white text-2xl flex items-center justify-center border-b-4 border-[#cc7a00] hover:bg-[#ffaa33] active:translate-y-1 active:border-b-0 transition-all disabled:opacity-50"
         >
@@ -151,6 +151,7 @@ const messages = ref([])
 const isLoading = ref(false)
 const currentHint = ref(null)
 const hintRevealLevel = ref(0)
+const hintVisible = ref(false)
 const showCompletion = ref(false)
 const turnCount = ref(0)
 let sessionId = null
@@ -239,6 +240,8 @@ async function handleRecording(audioBlob) {
     })
 
     currentHint.value = result.hint
+    hintVisible.value = false
+    hintRevealLevel.value = 0
     turnCount.value++
 
     // Update missions
