@@ -163,8 +163,18 @@
       </footer>
     </div>
 
-    <!-- Right Sidebar: Missions -->
+    <!-- Right Sidebar: Scene + Missions -->
     <aside class="w-72 flex-shrink-0 bg-kinari-50 border-l border-kinari-200 p-5 overflow-y-auto">
+      <!-- Scene card -->
+      <div v-if="sceneDescription" class="bg-white rounded-xl border border-kinari-200 shadow-paper p-4 mb-6 msg-in">
+        <div class="flex items-baseline justify-between mb-2">
+          <h3 class="font-jserif text-sm font-bold text-sumi-800">場面</h3>
+          <span class="text-[10px] tracking-[0.3em] text-sumi-500">SCENE</span>
+        </div>
+        <p v-if="sceneTitle" class="font-jserif text-ai-700 font-bold text-sm mb-1.5">{{ sceneTitle }}</p>
+        <p class="text-sm text-sumi-600 leading-relaxed">{{ sceneDescription }}</p>
+      </div>
+
       <div class="flex items-baseline justify-between mb-1">
         <h3 class="font-jserif text-lg font-bold text-sumi-800">ミッション</h3>
         <span class="text-[10px] tracking-[0.3em] text-sumi-500">MISSION</span>
@@ -271,6 +281,8 @@ const route = useRoute()
 const router = useRouter()
 
 const scenarioTitle = ref('')
+const sceneTitle = ref('')
+const sceneDescription = ref('')
 const missions = ref([])
 const messages = ref([])
 const isLoading = ref(false)
@@ -316,6 +328,8 @@ onMounted(async () => {
 
     sessionId = session.id
     scenarioTitle.value = scenario.title
+    sceneTitle.value = scenario.scene?.title || ''
+    sceneDescription.value = scenario.scene?.description || ''
     missions.value = session.missions
 
     const { turn, hint } = await SessionService.startSession(session.id)
