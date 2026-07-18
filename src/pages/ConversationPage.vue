@@ -61,7 +61,16 @@
           <!-- User message -->
           <div v-else class="flex justify-end">
             <div class="max-w-[80%] bg-[#58cc02] text-white px-4 py-3 rounded-2xl rounded-br-sm border-b-4 border-[#58a700]">
-              <p class="font-bold">{{ msg.text }}</p>
+              <div class="flex items-center gap-2">
+                <p class="font-bold flex-1">{{ msg.text }}</p>
+                <button
+                  v-if="msg.audioBase64"
+                  @click="playUserAudio(msg)"
+                  class="w-8 h-8 rounded-full bg-white/20 text-white flex items-center justify-center text-sm hover:bg-white/30 transition-all"
+                >
+                  {{ msg.isPlaying ? '⏸' : '▶' }}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -221,7 +230,11 @@ async function handleRecording(audioBlob) {
   try {
     const wavBlob = await convertToWav(audioBlob)
     const base64 = await blobToBase64(wavBlob)
-    messages.value.push({ role: 'user', text: '🎤 録音中...' })
+    messages.value.push({
+      role: 'user',
+      text: '🎤 録音中...',
+      audioBase64: base64
+    })
 
     const result = await SessionService.addTurn(sessionId, base64)
     messages.value[messages.value.length - 1].text = result.evaluation?.transcript || '🎤 音声メッセージ'
@@ -266,6 +279,19 @@ async function handleRecording(audioBlob) {
     console.error('Failed to process recording:', error)
   } finally {
     isLoading.value = false
+  }
+}
+
+async function playUserAudio(msg) {
+  if (!msg.audioBase64) return
+  try {
+    msg.isPlaying = true
+    const audio = new Audio(`data:audio/wav;base64,${msg.audioBase64}`)
+    audio.onended = () => { msg.isPlaying = false }
+    audio.onerror = () => { msg.isPlaying = false }
+    await audio.play()
+  } catch (e) {
+    msg.isPlaying = false
   }
 }
 
