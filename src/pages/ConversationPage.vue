@@ -19,11 +19,28 @@
               {{ kw }}
             </span>
           </div>
-          <div class="border-t border-kinari-200 pt-3 cursor-pointer select-none group" @click="hintRevealLevel = Math.min(hintRevealLevel + 1, 3)">
-            <p class="font-jserif font-bold text-sumi-800 group-hover:text-ai-700 transition-colors">{{ currentHint.sentence }}</p>
-            <p v-if="hintRevealLevel >= 2" class="text-sm text-sumi-500 mt-1">{{ currentHint.sentence_reading }}</p>
-            <p v-if="hintRevealLevel >= 3" class="text-sm text-sumi-500/80 mt-1">{{ currentHint.sentence_translation }}</p>
-            <p v-if="hintRevealLevel < 3" class="text-[10px] tracking-widest text-sumi-500/60 mt-2">クリックで読み・訳を表示</p>
+          <div class="border-t border-kinari-200 pt-3">
+            <!-- 3-tier reveal: 文 / ふりがな / 訳 -->
+            <div class="flex items-center gap-1.5 mb-2">
+              <button
+                v-for="tier in [
+                  { key: 'text', label: '文' },
+                  { key: 'reading', label: 'ふりがな' },
+                  { key: 'translation', label: '訳' },
+                ]"
+                :key="tier.key"
+                @click="hintTiers[tier.key] = !hintTiers[tier.key]"
+                class="px-2.5 py-1 rounded-full text-xs font-bold border transition-all"
+                :class="hintTiers[tier.key]
+                  ? 'bg-ai-600 text-kinari-50 border-ai-600'
+                  : 'bg-white text-sumi-500 border-kinari-300 hover:border-ai-400 hover:text-ai-600'"
+              >
+                {{ tier.label }}
+              </button>
+            </div>
+            <p v-if="hintTiers.text" class="font-jserif font-bold text-sumi-800">{{ currentHint.sentence }}</p>
+            <p v-if="hintTiers.reading" class="text-sm text-sumi-500 mt-1">{{ currentHint.sentence_reading }}</p>
+            <p v-if="hintTiers.translation" class="text-sm text-sumi-500/80 mt-1">{{ currentHint.sentence_translation }}</p>
           </div>
         </div>
       </Transition>
@@ -127,7 +144,7 @@
       <footer class="bg-kinari-50 border-t border-kinari-200 px-6 py-4 flex-shrink-0">
         <div class="flex justify-center items-center gap-6">
           <button
-            @click="hintVisible = true; hintRevealLevel = 1"
+            @click="hintVisible = true"
             :disabled="!currentHint"
             class="w-14 h-14 rounded-full bg-kin-500/15 text-kin-600 text-xl flex items-center justify-center border border-kin-500/30 transition-all hover:bg-kin-500/25 hover:-translate-y-0.5 hover:shadow-paper active:translate-y-0 disabled:opacity-40 disabled:hover:translate-y-0"
           >
@@ -243,7 +260,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { convertToWav } from '../utils/audio.js'
 import { SessionService } from '../services/SessionService.js'
@@ -258,8 +275,15 @@ const missions = ref([])
 const messages = ref([])
 const isLoading = ref(false)
 const currentHint = ref(null)
-const hintRevealLevel = ref(0)
+// ヒントの 3 档表示（提示的核心是例句本身，所以默认显示「文」）
+const hintTiers = reactive({ text: true, reading: false, translation: false })
 const hintVisible = ref(false)
+
+function resetHintTiers() {
+  hintTiers.text = true
+  hintTiers.reading = false
+  hintTiers.translation = false
+}
 const showCompletion = ref(false)
 const turnCount = ref(0)
 const errorMessage = ref('')
@@ -344,7 +368,7 @@ async function playNpcAudio(msg) {
 async function handleRecording(audioBlob) {
   isLoading.value = true
   currentHint.value = null
-  hintRevealLevel.value = 0
+  resetHintTiers()
 
   try {
     const wavBlob = await convertToWav(audioBlob)
@@ -375,7 +399,7 @@ async function handleRecording(audioBlob) {
 
     currentHint.value = result.hint
     hintVisible.value = false
-    hintRevealLevel.value = 0
+    resetHintTiers()
     turnCount.value++
 
     // Update missions
