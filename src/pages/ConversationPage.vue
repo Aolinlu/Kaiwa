@@ -244,7 +244,9 @@ async function handleRecording(audioBlob) {
     // Update missions
     if (result.missionUpdates) {
       for (const update of result.missionUpdates) {
-        const mission = missions.value.find((m) => m.missionId === update.id)
+        const mission = missions.value.find(
+          (m) => m.missionId === update.id && m.side === update.side
+        )
         if (mission) mission.status = update.status
       }
     }
