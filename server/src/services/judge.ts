@@ -39,11 +39,11 @@ interface Mission {
 }
 
 export async function evaluateMissions(
-  userText: string,
   npcText: string,
+  userText: string,
   missions: Mission[]
 ) {
-  console.log(`[Judge] evaluateMissions: user="${userText}", npc="${npcText}"`)
+  console.log(`[Judge] evaluateMissions: npc="${npcText}", user="${userText}"`)
   console.log(`[Judge] missions:`, missions.map((m) => `${m.id}(${m.side})=${m.status}`))
 
   const missionRuntime = missions
