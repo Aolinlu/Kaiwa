@@ -67,20 +67,29 @@
                     <div class="h-full bg-ai-500 rounded-full transition-all duration-100" :style="{ width: (msg.progress || 0) + '%' }" />
                   </div>
                 </div>
-                <!-- Progressive reveal -->
-                <div v-if="msg.audioEnded" class="mt-3 border-t border-kinari-200 pt-3">
-                  <div class="cursor-pointer select-none group" @click="msg.revealLevel = Math.min((msg.revealLevel || 0) + 1, 3)">
-                    <p class="font-jserif text-sumi-800 font-bold text-lg group-hover:text-ai-700 transition-colors">{{ msg.text }}</p>
-                  </div>
-                  <div v-if="(msg.revealLevel || 0) >= 2" class="cursor-pointer select-none" @click="msg.revealLevel = 3">
-                    <p class="text-sm text-sumi-500 mt-1">{{ msg.reading }}</p>
-                  </div>
-                  <div v-if="(msg.revealLevel || 0) >= 3">
-                    <p class="text-sm text-sumi-500/80 mt-1">{{ msg.translation }}</p>
-                  </div>
-                  <p v-if="(msg.revealLevel || 0) < 3" class="text-[10px] tracking-widest text-sumi-500/60 mt-2">クリックで読み・訳を表示</p>
+                <!-- 3-tier text reveal: 文 / ふりがな / 訳（默认全隐藏，练听力） -->
+                <div class="mt-3 flex items-center gap-1.5">
+                  <button
+                    v-for="tier in [
+                      { key: 'showText', label: '文' },
+                      { key: 'showReading', label: 'ふりがな' },
+                      { key: 'showTranslation', label: '訳' },
+                    ]"
+                    :key="tier.key"
+                    @click="msg[tier.key] = !msg[tier.key]"
+                    class="px-2.5 py-1 rounded-full text-xs font-bold border transition-all"
+                    :class="msg[tier.key]
+                      ? 'bg-ai-600 text-kinari-50 border-ai-600'
+                      : 'bg-white text-sumi-500 border-kinari-300 hover:border-ai-400 hover:text-ai-600'"
+                  >
+                    {{ tier.label }}
+                  </button>
                 </div>
-                <p v-else class="mt-3 text-[10px] tracking-widest text-sumi-500/60">🔊 まず音声を聞いてみましょう</p>
+                <div v-if="msg.showText || msg.showReading || msg.showTranslation" class="mt-2.5 border-t border-kinari-200 pt-2.5 space-y-1">
+                  <p v-if="msg.showText" class="font-jserif text-sumi-800 font-bold text-lg">{{ msg.text }}</p>
+                  <p v-if="msg.showReading" class="text-sm text-sumi-500">{{ msg.reading }}</p>
+                  <p v-if="msg.showTranslation" class="text-sm text-sumi-500/80">{{ msg.translation }}</p>
+                </div>
               </div>
             </div>
 
@@ -126,7 +135,7 @@
           </button>
           <VoiceButton :disabled="isLoading" @recording-complete="handleRecording" />
           <button
-            @click="showCompletion = true"
+            @click="openCompletion"
             :disabled="isLoading"
             class="w-14 h-14 rounded-full bg-shu-500/15 text-shu-500 text-xl flex items-center justify-center border border-shu-500/30 transition-all hover:bg-shu-500/25 hover:-translate-y-0.5 hover:shadow-paper active:translate-y-0 disabled:opacity-40 disabled:hover:translate-y-0"
           >
@@ -177,12 +186,30 @@
           </div>
           <div class="p-8 text-center">
             <h2 class="font-jserif text-2xl font-bold text-sumi-800 mb-2">練習完了！</h2>
-            <p class="text-sumi-500 text-sm mb-6">本次練習了 {{ turnCount }} 輪対話</p>
+            <p class="text-sumi-500 text-sm mb-5">本次練習了 {{ turnCount }} 輪対話</p>
+
+            <!-- Report generation status -->
+            <div class="mb-6">
+              <div v-if="reportError" class="flex items-center justify-center gap-2 text-sm text-shu-500">
+                <span>⚠️ レポートの生成に失敗しました</span>
+                <button @click="generateReport" class="text-ai-600 font-bold underline underline-offset-2 hover:text-ai-500">再試行</button>
+              </div>
+              <div v-else-if="!reportReady" class="flex items-center justify-center gap-2.5 text-sm text-sumi-500">
+                <span class="w-4 h-4 rounded-full border-2 border-kinari-300 border-t-ai-500 animate-spin"></span>
+                <span>対話が終了しました。レポートを生成しています…</span>
+              </div>
+              <div v-else class="flex items-center justify-center gap-2 text-sm font-bold text-ai-600">
+                <span>✓</span>
+                <span>レポートの準備ができました</span>
+              </div>
+            </div>
+
             <button
               @click="goToReport"
-              class="w-full py-3.5 rounded-lg bg-ai-600 text-kinari-50 font-bold shadow-paper transition-all hover:bg-ai-500 hover:shadow-paper-lg hover:-translate-y-0.5 active:translate-y-0"
+              :disabled="!reportReady"
+              class="w-full py-3.5 rounded-lg bg-ai-600 text-kinari-50 font-bold shadow-paper transition-all hover:bg-ai-500 hover:shadow-paper-lg hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-paper disabled:cursor-not-allowed"
             >
-              学習レポートを見る →
+              {{ reportReady ? '学習レポートを見る →' : 'レポート生成中…' }}
             </button>
           </div>
         </div>
@@ -237,6 +264,9 @@ const showCompletion = ref(false)
 const turnCount = ref(0)
 const errorMessage = ref('')
 const showError = ref(false)
+const reportReady = ref(false)
+const reportGenerating = ref(false)
+const reportError = ref(false)
 let sessionId = null
 
 const userMissions = computed(() => {
@@ -275,7 +305,9 @@ onMounted(async () => {
       isPlaying: false,
       progress: 0,
       audioEnded: false,
-      revealLevel: 0,
+      showText: false,
+      showReading: false,
+      showTranslation: false,
     })
     currentHint.value = hint
 
@@ -325,7 +357,7 @@ async function handleRecording(audioBlob) {
     })
 
     const result = await SessionService.addTurn(sessionId, base64)
-    messages.value[messages.value.length - 1].text = result.evaluation?.transcript || '🎤 音声メッセージ'
+    messages.value[messages.value.length - 1].text = result.turn?.userText || result.evaluation?.transcript || '🎤 音声メッセージ'
 
     messages.value.push({
       role: 'assistant',
@@ -336,7 +368,9 @@ async function handleRecording(audioBlob) {
       isPlaying: false,
       progress: 0,
       audioEnded: false,
-      revealLevel: 0,
+      showText: false,
+      showReading: false,
+      showTranslation: false,
     })
 
     currentHint.value = result.hint
@@ -361,7 +395,7 @@ async function handleRecording(audioBlob) {
     }
 
     if (result.allComplete || result.end) {
-      setTimeout(() => { showCompletion.value = true }, 2000)
+      setTimeout(openCompletion, 2000)
     }
   } catch (error) {
     console.error('Failed to process recording:', error)
@@ -403,13 +437,29 @@ function retryLastAction() {
   }
 }
 
-async function goToReport() {
+async function generateReport() {
+  if (reportGenerating.value || reportReady.value) return
+  reportGenerating.value = true
+  reportError.value = false
   try {
     await SessionService.generateReport(sessionId)
-    router.push(`/report/${sessionId}`)
+    reportReady.value = true
   } catch (e) {
-    router.push(`/report/${sessionId}`)
+    console.error('Failed to generate report:', e)
+    reportError.value = true
+  } finally {
+    reportGenerating.value = false
   }
+}
+
+function openCompletion() {
+  showCompletion.value = true
+  generateReport()
+}
+
+function goToReport() {
+  if (!reportReady.value) return
+  router.push(`/report/${sessionId}`)
 }
 
 function goBack() {
