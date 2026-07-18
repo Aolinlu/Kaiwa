@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col items-center gap-2">
+  <div class="flex flex-col items-center gap-1.5">
     <button
       @mousedown="startRecording"
       @mouseup="stopRecording"
@@ -7,16 +7,22 @@
       @touchstart.prevent="startRecording"
       @touchend.prevent="stopRecording"
       :class="[
-        'w-16', 'h-16', 'rounded-full', 'flex', 'items-center', 'justify-center',
-        'text-2xl', 'transition-all', 'duration-200', 'select-none',
-        isRecording ? 'bg-red-500 scale-110 shadow-lg' : 'bg-green-500 hover:bg-green-600'
+        'relative', 'w-20', 'h-20', 'rounded-full', 'flex', 'items-center', 'justify-center',
+        'text-3xl', 'transition-all', 'duration-200', 'select-none', 'shadow-paper',
+        isRecording
+          ? 'bg-shu-500 scale-110 shadow-paper-lg'
+          : 'bg-ai-600 hover:bg-ai-500 hover:-translate-y-0.5 hover:shadow-paper-lg active:translate-y-0'
       ]"
       :disabled="disabled"
     >
-      🎤
+      <span
+        v-if="isRecording"
+        class="absolute inset-0 rounded-full bg-shu-500 animate-ping opacity-40"
+      ></span>
+      <span class="relative">🎤</span>
     </button>
-    <div class="text-sm text-gray-500">
-      {{ isRecording ? 'Recording...' : 'Hold to speak' }}
+    <div class="text-xs tracking-wide" :class="isRecording ? 'text-shu-500 font-bold' : 'text-sumi-500'">
+      {{ isRecording ? '録音中…' : '長押しで話す' }}
     </div>
   </div>
 </template>
