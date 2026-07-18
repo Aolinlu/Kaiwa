@@ -307,6 +307,7 @@ sessionRoutes.post('/:id/turns', async (c) => {
     hint: npcReply.hint,
     allComplete,
     end: npcReply.end || false,
+    missionUpdates,
     evaluation: {
       grammar: evaluation.grammar,
       pronunciation: evaluation.pronunciation,

@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-[#f7f7f7] flex">
     <!-- Left Sidebar: Hint -->
-    <aside class="w-80 flex-shrink-0 bg-white border-r-2 border-[#e5e5e5] p-4 overflow-y-auto">
+    <aside class="w-80 flex-shrink-0 bg-white border-r-2 border-[#e5e5e5] p-4 sticky top-0 h-screen overflow-y-auto">
       <div v-if="currentHint && hintVisible" class="bg-[#fff4d6] border-2 border-[#ff9600] border-b-4 rounded-2xl p-4">
         <div class="flex items-center gap-2 mb-2">
           <span class="text-xl">💡</span>
@@ -124,11 +124,11 @@
     </div>
 
     <!-- Right Sidebar: Missions -->
-    <aside class="w-64 flex-shrink-0 bg-white border-l-2 border-[#e5e5e5] p-4 overflow-y-auto">
+    <aside class="w-64 flex-shrink-0 bg-white border-l-2 border-[#e5e5e5] p-4 sticky top-0 h-screen overflow-y-auto">
       <h3 class="font-extrabold text-[#3c3c3c] mb-3">ミッション</h3>
       <div class="space-y-2">
         <div
-          v-for="m in missions"
+          v-for="m in userMissions"
           :key="m.id"
           class="flex items-center gap-2 p-2 rounded-lg"
           :class="m.status === 'completed' ? 'bg-[#dbf8c5]' : 'bg-[#f7f7f7]'"
@@ -162,7 +162,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { convertToWav } from '../utils/audio.js'
 import { SessionService } from '../services/SessionService.js'
@@ -182,6 +182,10 @@ const hintVisible = ref(false)
 const showCompletion = ref(false)
 const turnCount = ref(0)
 let sessionId = null
+
+const userMissions = computed(() => {
+  return missions.value.filter((m) => m.side === 'user')
+})
 
 onMounted(async () => {
   try {
