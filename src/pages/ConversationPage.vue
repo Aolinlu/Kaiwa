@@ -1,7 +1,17 @@
 <template>
   <div class="h-screen bg-kinari-100 flex overflow-hidden">
-    <!-- Left Sidebar: Hint -->
+    <!-- Left Sidebar: Scene + Hint -->
     <aside class="w-72 flex-shrink-0 bg-kinari-50 border-r border-kinari-200 p-5 overflow-y-auto">
+      <!-- Scene -->
+      <div v-if="sceneDescription" class="mb-8">
+        <div class="flex items-baseline justify-between mb-3">
+          <h3 class="font-jserif text-lg font-bold text-sumi-800">場面</h3>
+          <span class="text-[10px] tracking-[0.3em] text-sumi-500">SCENE</span>
+        </div>
+        <p v-if="sceneTitle" class="font-jserif text-ai-700 font-bold text-sm mb-1.5">{{ sceneTitle }}</p>
+        <p class="text-sm text-sumi-600 leading-relaxed">{{ sceneDescription }}</p>
+      </div>
+
       <div class="flex items-baseline justify-between mb-4">
         <h3 class="font-jserif text-lg font-bold text-sumi-800">ヒント</h3>
         <span class="text-[10px] tracking-[0.3em] text-sumi-500">HINT</span>
@@ -163,18 +173,8 @@
       </footer>
     </div>
 
-    <!-- Right Sidebar: Scene + Missions -->
+    <!-- Right Sidebar: Missions -->
     <aside class="w-72 flex-shrink-0 bg-kinari-50 border-l border-kinari-200 p-5 overflow-y-auto">
-      <!-- Scene card -->
-      <div v-if="sceneDescription" class="bg-white rounded-xl border border-kinari-200 shadow-paper p-4 mb-6 msg-in">
-        <div class="flex items-baseline justify-between mb-2">
-          <h3 class="font-jserif text-sm font-bold text-sumi-800">場面</h3>
-          <span class="text-[10px] tracking-[0.3em] text-sumi-500">SCENE</span>
-        </div>
-        <p v-if="sceneTitle" class="font-jserif text-ai-700 font-bold text-sm mb-1.5">{{ sceneTitle }}</p>
-        <p class="text-sm text-sumi-600 leading-relaxed">{{ sceneDescription }}</p>
-      </div>
-
       <div class="flex items-baseline justify-between mb-1">
         <h3 class="font-jserif text-lg font-bold text-sumi-800">ミッション</h3>
         <span class="text-[10px] tracking-[0.3em] text-sumi-500">MISSION</span>

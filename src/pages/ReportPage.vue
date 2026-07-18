@@ -44,14 +44,14 @@
           <div class="bg-white rounded-2xl border border-kinari-200 shadow-paper p-5 msg-in">
             <div class="flex items-baseline justify-between mb-1">
               <h3 class="font-jserif font-bold text-sumi-800">ミッション</h3>
-              <span class="text-xs text-sumi-500">{{ missionDone }}/{{ session.missions.length }} 達成</span>
+              <span class="text-xs text-sumi-500">{{ missionDone }}/{{ userMissions.length }} 達成</span>
             </div>
             <div class="w-full bg-kinari-200 rounded-full h-1.5 overflow-hidden mb-4">
               <div class="h-full bg-gradient-to-r from-ai-500 to-ai-400 rounded-full transition-all duration-500" :style="{ width: missionProgress + '%' }" />
             </div>
             <div class="space-y-2">
               <div
-                v-for="m in session.missions"
+                v-for="m in userMissions"
                 :key="m.id"
                 class="flex items-center gap-3 p-2.5 rounded-lg border transition-all duration-500"
                 :class="m.status === 'completed' ? 'bg-ai-50 border-ai-200' : 'bg-white border-kinari-200'"
@@ -272,12 +272,16 @@ const evalBars = computed(() => [
   { label: '自然さ', value: avgNaturalness.value, color: 'bg-shu-400' },
 ])
 
+const userMissions = computed(() => {
+  return (session.value?.missions || []).filter((m) => m.side === 'user')
+})
+
 const missionDone = computed(() => {
-  return (session.value?.missions || []).filter((m) => m.status === 'completed').length
+  return userMissions.value.filter((m) => m.status === 'completed').length
 })
 
 const missionProgress = computed(() => {
-  const total = session.value?.missions?.length || 0
+  const total = userMissions.value.length
   return total ? (missionDone.value / total) * 100 : 0
 })
 
