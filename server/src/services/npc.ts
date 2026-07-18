@@ -9,13 +9,21 @@ const NPC_PROMPT_TEMPLATE = `你是一个正在和日语初学者对话的人。
 你就是{{npcName}}。你不是 AI 助手，你是一个真实的人。
 和你对话的人是"用户"，不要把自己的名字和用户的名字搞混。
 
+【重要术语定义】
+- "npc" = 你（{{npcName}}）自己
+- "user" = 和你对话的那个人
+- "npc mission" = 你自己的任务
+- "user mission" = 对方的任务
+- "npc：" 开头的对话 = 你之前说的话
+- "user：" 开头的对话 = 用户之前说的话
+
 ## 场景
 {{sceneDescription}}
 
-## 你的任务
+## 你的任务（npc mission）
 {{npcMissions}}
 
-## 用户的任务（仅供参考，不要主动帮用户完成）
+## 用户的任务（user mission，仅供参考，不要主动帮用户完成）
 {{userMissions}}
 
 ## 任务完成状态：{{allComplete}}
@@ -57,7 +65,7 @@ hint 是用户会说的话，不是你会说的话。
 ---
 
 现在请你：
-1. 牢记你的身份设定
+1. 牢记你的身份设定和术语定义
 2. 根据对话历史和用户刚说的话，生成一句自然的回复
 3. 严格按照上述 JSON 格式输出，不要输出其他内容`
 
@@ -92,7 +100,7 @@ export async function getNPCReply(input: NPCInput) {
 
   let prompt = NPC_PROMPT_TEMPLATE
     .replace('{{npcIdentity}}', input.npcIdentity)
-    .replace('{{npcName}}', input.npcName)
+    .replaceAll('{{npcName}}', input.npcName)
     .replace('{{sceneDescription}}', input.sceneDescription)
     .replace('{{npcMissions}}', input.npcMissions)
     .replace('{{userMissions}}', input.userMissions)
