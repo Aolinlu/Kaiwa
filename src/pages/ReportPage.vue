@@ -102,7 +102,7 @@
             <div class="space-y-4">
               <div v-for="turn in session.turns" :key="turn.id" class="border-b border-[#e5e5e5] pb-4 last:border-0">
                 <!-- NPC -->
-                <div class="mb-2">
+                <div class="mb-3">
                   <p class="text-xs text-[#777777] mb-1">{{ session.npcName }}</p>
                   <div class="bg-[#f7f7f7] rounded-xl p-3">
                     <p class="font-bold text-[#3c3c3c]">{{ turn.npcText }}</p>
@@ -131,6 +131,46 @@
                       >
                         ▶️ あなたの音声
                       </button>
+                    </div>
+                  </div>
+
+                  <!-- Teacher Evaluation -->
+                  <div v-if="turn.grammarScore || turn.pronunciationScore || turn.naturalnessScore" class="mt-2 bg-[#fff4d6] border-2 border-[#ff9600] rounded-xl p-3">
+                    <p class="text-xs font-extrabold text-[#cc7a00] mb-2">Teacher 評価</p>
+                    <div class="space-y-2">
+                      <div v-if="turn.grammarScore">
+                        <div class="flex justify-between text-xs mb-1">
+                          <span class="text-[#777777]">文法</span>
+                          <span class="font-bold text-[#3c3c3c]">{{ turn.grammarScore.toFixed(1) }}</span>
+                        </div>
+                        <div class="w-full bg-[#e5e5e5] rounded-full h-1.5">
+                          <div class="h-full bg-[#58cc02] rounded-full" :style="{ width: (turn.grammarScore * 10) + '%' }" />
+                        </div>
+                        <div v-if="turn.grammarErrors" class="text-xs text-[#777777] mt-1">
+                          {{ JSON.parse(turn.grammarErrors).join(', ') }}
+                        </div>
+                      </div>
+                      <div v-if="turn.pronunciationScore">
+                        <div class="flex justify-between text-xs mb-1">
+                          <span class="text-[#777777]">発音</span>
+                          <span class="font-bold text-[#3c3c3c]">{{ turn.pronunciationScore.toFixed(1) }}</span>
+                        </div>
+                        <div class="w-full bg-[#e5e5e5] rounded-full h-1.5">
+                          <div class="h-full bg-[#ff9600] rounded-full" :style="{ width: (turn.pronunciationScore * 10) + '%' }" />
+                        </div>
+                        <div v-if="turn.pronunciationIssues" class="text-xs text-[#777777] mt-1">
+                          {{ JSON.parse(turn.pronunciationIssues).join(', ') }}
+                        </div>
+                      </div>
+                      <div v-if="turn.naturalnessScore">
+                        <div class="flex justify-between text-xs mb-1">
+                          <span class="text-[#777777]">自然さ</span>
+                          <span class="font-bold text-[#3c3c3c]">{{ turn.naturalnessScore.toFixed(1) }}</span>
+                        </div>
+                        <div class="w-full bg-[#e5e5e5] rounded-full h-1.5">
+                          <div class="h-full bg-[#1cb0f6] rounded-full" :style="{ width: (turn.naturalnessScore * 10) + '%' }" />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
