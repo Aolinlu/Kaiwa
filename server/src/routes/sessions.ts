@@ -210,14 +210,32 @@ sessionRoutes.post('/:id/turns', async (c) => {
     orderBy: { turnIndex: 'asc' },
   })
 
+  const { StorageService } = await import('../services/storage.js')
+  let userAudioPath: string | null = null
+  if (userAudioBase64) {
+    const buffer = Buffer.from(userAudioBase64, 'base64')
+    userAudioPath = await StorageService.saveAudio(sessionId, `turn_${turnIndex}_user.wav`, buffer)
+  }
+
+  const { evaluateUserSpeech } = await import('../services/teacher.js')
+  const recentContext = allTurns.slice(-4).map((t) => `NPC: ${t.npcText}\nUser: ${t.userText || ''}`).join('\n')
+  const evaluation = await evaluateUserSpeech(userAudioBase64, recentContext)
+  const userText = evaluation.user_text || evaluation.transcript || '🎤 Voice message'
+
+  const { evaluateMissions } = await import('../services/judge.js')
+
   // Build full conversation history for both NPC and Judge
-  const fullHistory = JSON.stringify(
-    allTurns.flatMap((t) => {
-      const msgs = []
-      if (t.npcText) msgs.push({ speaker: 'npc', message: t.npcText })
-      if (t.userText) msgs.push({ speaker: 'user', message: t.userText })
-      return msgs
-    }),
+  const historyMessages = allTurns.flatMap((t) => {
+    const msgs = []
+    if (t.npcText) msgs.push({ speaker: 'npc', message: t.npcText })
+    if (t.userText) msgs.push({ speaker: 'user', message: t.userText })
+    return msgs
+  })
+  // NPC: history excludes the current user message (sent separately as latestUserMessage)
+  const npcHistory = JSON.stringify(historyMessages, null, 2)
+  // Judge: include the current user message so this turn is judged immediately
+  const judgeHistory = JSON.stringify(
+    [...historyMessages, { speaker: 'user', message: userText }],
     null,
     2
   )
@@ -225,10 +243,10 @@ sessionRoutes.post('/:id/turns', async (c) => {
   // Load scenario to get mission goals
   const scenarioPathForJudge = resolve(SERVER_ROOT, 'data', 'courses', session.courseId, `${session.scenarioId}.json`)
   const scenarioDataForJudge = JSON.parse(await readFile(scenarioPathForJudge, 'utf-8'))
-  const missionGoals = new Map(scenarioDataForJudge.missions.map((m: any) => [m.id, m.goal]))
+  const missionGoals = new Map<string, string>(scenarioDataForJudge.missions.map((m: any) => [m.id, m.goal]))
 
   const missionUpdates = await evaluateMissions(
-    fullHistory,
+    judgeHistory,
     session.missions.map((m) => ({
       id: m.missionId,
       side: m.side,
@@ -274,7 +292,7 @@ sessionRoutes.post('/:id/turns', async (c) => {
     npcMissions: npcMissionsStr,
     userMissions: userMissionsStr,
     allComplete,
-    history: fullHistory,
+    history: npcHistory,
     latestUserMessage: userText,
     isFirstMessage: false,
     sessionId,
