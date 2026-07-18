@@ -209,31 +209,18 @@ sessionRoutes.post('/:id/turns', async (c) => {
     where: { sessionId },
     orderBy: { turnIndex: 'asc' },
   })
-  const history = JSON.stringify(
-    allTurns.map((t) => ({ role: 'assistant', content: t.npcText }))
+
+  // Build full conversation history for both NPC and Judge
+  const fullHistory = JSON.stringify(
+    allTurns.flatMap((t) => {
+      const msgs = []
+      if (t.npcText) msgs.push({ speaker: 'npc', message: t.npcText })
+      if (t.userText) msgs.push({ speaker: 'user', message: t.userText })
+      return msgs
+    }),
+    null,
+    2
   )
-
-  const { StorageService } = await import('../services/storage.js')
-  let userAudioPath: string | null = null
-  if (userAudioBase64) {
-    const buffer = Buffer.from(userAudioBase64, 'base64')
-    userAudioPath = await StorageService.saveAudio(sessionId, `turn_${turnIndex}_user.wav`, buffer)
-  }
-
-  const { evaluateUserSpeech } = await import('../services/teacher.js')
-  const recentContext = allTurns.slice(-4).map((t) => `NPC: ${t.npcText}\nUser: ${t.userText || ''}`).join('\n')
-  const evaluation = await evaluateUserSpeech(userAudioBase64, recentContext)
-  const userText = evaluation.user_text || evaluation.transcript || '🎤 Voice message'
-
-  const { evaluateMissions } = await import('../services/judge.js')
-
-  // Build full conversation history for judge
-  const fullHistory = allTurns.map((t) => {
-    const lines = []
-    if (t.npcText) lines.push(`NPC: ${t.npcText}`)
-    if (t.userText) lines.push(`User: ${t.userText}`)
-    return lines.join('\n')
-  }).join('\n')
 
   // Load scenario to get mission goals
   const scenarioPathForJudge = resolve(SERVER_ROOT, 'data', 'courses', session.courseId, `${session.scenarioId}.json`)
@@ -287,7 +274,7 @@ sessionRoutes.post('/:id/turns', async (c) => {
     npcMissions: npcMissionsStr,
     userMissions: userMissionsStr,
     allComplete,
-    history,
+    history: fullHistory,
     latestUserMessage: userText,
     isFirstMessage: false,
     sessionId,
