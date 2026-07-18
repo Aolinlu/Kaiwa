@@ -207,7 +207,6 @@ async function playNpcAudio(msg) {
     msg.progress = 100
     msg.isPlaying = false
     msg.audioEnded = true
-    msg.revealLevel = 0
   } catch (e) {
     msg.isPlaying = false
     msg.audioEnded = true
