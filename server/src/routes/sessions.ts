@@ -227,8 +227,8 @@ sessionRoutes.post('/:id/turns', async (c) => {
 
   const { evaluateMissions } = await import('../services/judge.js')
   const missionUpdates = await evaluateMissions(
-    userText,
     allTurns[allTurns.length - 1]?.npcText || '',
+    userText,
     session.missions.map((m) => ({ id: m.missionId, side: m.side, title: m.title, status: m.status }))
   )
 
