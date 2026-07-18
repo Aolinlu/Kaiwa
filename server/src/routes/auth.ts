@@ -4,7 +4,14 @@ import { signToken } from '../utils/jwt.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { prisma } from '../lib/prisma.js'
 
-export const authRoutes = new Hono()
+type Env = {
+  Variables: {
+    userId: string
+    role: string
+  }
+}
+
+export const authRoutes = new Hono<Env>()
 
 authRoutes.post('/login', async (c) => {
   const { email, password } = await c.req.json()
