@@ -158,6 +158,30 @@
         </button>
       </div>
     </div>
+
+    <!-- Error overlay -->
+    <div v-if="showError" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div class="bg-white border-2 border-[#e5e5e5] border-b-4 rounded-2xl p-8 max-w-sm mx-4 text-center">
+        <h2 class="text-3xl font-extrabold text-[#ff4b4b] mb-2">⚠️ エラー</h2>
+        <p class="text-[#777777] mb-6">
+          {{ errorMessage }}
+        </p>
+        <div class="flex gap-3">
+          <button
+            @click="showError = false"
+            class="flex-1 py-3 bg-white text-[#777777] font-extrabold rounded-2xl border-2 border-[#e5e5e5] border-b-4 hover:text-[#3c3c3c] active:translate-y-1 active:border-b-0 transition-all"
+          >
+            閉じる
+          </button>
+          <button
+            @click="showError = false; retryLastAction()"
+            class="flex-1 py-3 bg-[#58cc02] text-white font-extrabold rounded-2xl border-b-4 border-[#58a700] hover:bg-[#89e219] active:translate-y-1 active:border-b-0 transition-all"
+          >
+            再試行
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -181,6 +205,8 @@ const hintRevealLevel = ref(0)
 const hintVisible = ref(false)
 const showCompletion = ref(false)
 const turnCount = ref(0)
+const errorMessage = ref('')
+const showError = ref(false)
 let sessionId = null
 
 const userMissions = computed(() => {
@@ -252,6 +278,7 @@ async function handleRecording(audioBlob) {
   try {
     const wavBlob = await convertToWav(audioBlob)
     const base64 = await blobToBase64(wavBlob)
+    lastAudioBase64 = audioBlob // Store for retry
     messages.value.push({
       role: 'user',
       text: '🎤 録音中...',
@@ -299,6 +326,10 @@ async function handleRecording(audioBlob) {
     }
   } catch (error) {
     console.error('Failed to process recording:', error)
+    errorMessage.value = error.message || '处理失败，请重试'
+    showError.value = true
+    // Remove the pending user message
+    messages.value.pop()
   } finally {
     isLoading.value = false
   }
@@ -323,6 +354,14 @@ function blobToBase64(blob) {
     reader.onloadend = () => resolve(reader.result.split(',')[1])
     reader.readAsDataURL(blob)
   })
+}
+
+let lastAudioBase64 = null
+
+function retryLastAction() {
+  if (lastAudioBase64) {
+    handleRecording(lastAudioBase64)
+  }
 }
 
 async function goToReport() {

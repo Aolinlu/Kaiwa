@@ -226,10 +226,29 @@ sessionRoutes.post('/:id/turns', async (c) => {
   const userText = evaluation.user_text || evaluation.transcript || '🎤 Voice message'
 
   const { evaluateMissions } = await import('../services/judge.js')
+
+  // Build full conversation history for judge
+  const fullHistory = allTurns.map((t) => {
+    const lines = []
+    if (t.npcText) lines.push(`NPC: ${t.npcText}`)
+    if (t.userText) lines.push(`User: ${t.userText}`)
+    return lines.join('\n')
+  }).join('\n')
+
+  // Load scenario to get mission goals
+  const scenarioPathForJudge = resolve(SERVER_ROOT, 'data', 'courses', session.courseId, `${session.scenarioId}.json`)
+  const scenarioDataForJudge = JSON.parse(await readFile(scenarioPathForJudge, 'utf-8'))
+  const missionGoals = new Map(scenarioDataForJudge.missions.map((m: any) => [m.id, m.goal]))
+
   const missionUpdates = await evaluateMissions(
-    allTurns[allTurns.length - 1]?.npcText || '',
-    userText,
-    session.missions.map((m) => ({ id: m.missionId, side: m.side, title: m.title, status: m.status }))
+    fullHistory,
+    session.missions.map((m) => ({
+      id: m.missionId,
+      side: m.side,
+      title: m.title,
+      status: m.status,
+      goal: missionGoals.get(m.missionId) || '',
+    }))
   )
 
   for (const update of missionUpdates) {

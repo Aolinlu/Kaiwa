@@ -22,14 +22,54 @@
     }
   ],
   "missions": [
-    { "id": "tell_name", "title": "告诉对方你的名字", "scope": "both" },
-    { "id": "ask_name", "title": "询问对方的名字", "scope": "both" },
-    { "id": "tell_hometown", "title": "告诉对方你的家乡", "scope": "both" },
-    { "id": "ask_hometown", "title": "询问对方的家乡", "scope": "both" },
-    { "id": "tell_hobby", "title": "告诉对方你的爱好", "scope": "both" },
-    { "id": "ask_hobby", "title": "询问对方的爱好", "scope": "both" },
-    { "id": "tell_work", "title": "告诉对方你的工作/学校", "scope": "user" },
-    { "id": "ask_work", "title": "询问对方的工作/学校", "scope": "npc" }
+    {
+      "id": "tell_name",
+      "title": "告诉对方你的名字",
+      "scope": "both",
+      "goal": "用户或NPC主动说出了自己的名字"
+    },
+    {
+      "id": "ask_name",
+      "title": "询问对方的名字",
+      "scope": "both",
+      "goal": "已经知道了对方的名字（无论是对方主动说出还是自己问出）"
+    },
+    {
+      "id": "tell_hometown",
+      "title": "告诉对方你的家乡",
+      "scope": "both",
+      "goal": "用户或NPC主动说出了自己的家乡或所在地"
+    },
+    {
+      "id": "ask_hometown",
+      "title": "询问对方的家乡",
+      "scope": "both",
+      "goal": "已经知道了对方的家乡或所在地（无论是对方主动说出还是自己问出）"
+    },
+    {
+      "id": "tell_hobby",
+      "title": "告诉对方你的爱好",
+      "scope": "both",
+      "goal": "用户或NPC主动说出了自己的爱好"
+    },
+    {
+      "id": "ask_hobby",
+      "title": "询问对方的爱好",
+      "scope": "both",
+      "goal": "已经知道了对方的爱好（无论是对方主动说出还是自己问出）"
+    },
+    {
+      "id": "tell_work",
+      "title": "告诉对方你的工作/学校",
+      "scope": "user",
+      "goal": "用户主动说出了自己的工作或学校"
+    },
+    {
+      "id": "ask_work",
+      "title": "询问对方的工作/学校",
+      "scope": "npc",
+      "goal": "已经知道了NPC的工作或学校（无论是NPC主动说出还是用户问出）"
+    }
   ],
   "missionCount": [3, 4]
 }

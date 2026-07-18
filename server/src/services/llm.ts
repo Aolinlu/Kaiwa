@@ -6,27 +6,47 @@ const MIMO_CONFIG = {
   MODEL: process.env.MIMO_MODEL || '',
 }
 
+const MAX_RETRIES = 2
+
 export async function callLLM(messages: { role: string; content: string }[]): Promise<string> {
   console.log(`[LLM] calling ${MIMO_CONFIG.MODEL}, messages=${messages.length}`)
 
-  const response = await fetch(`${MIMO_CONFIG.BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${MIMO_CONFIG.API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: MIMO_CONFIG.MODEL,
-      messages,
-      response_format: { type: 'json_object' },
-    }),
-  })
+  let lastError: Error | null = null
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`LLM API error: ${response.status} - ${errorText}`)
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(`${MIMO_CONFIG.BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${MIMO_CONFIG.API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: MIMO_CONFIG.MODEL,
+          messages,
+          response_format: { type: 'json_object' },
+        }),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`LLM API error: ${response.status} - ${errorText}`)
+      }
+
+      const data = await response.json()
+      const content = data.choices?.[0]?.message?.content || ''
+
+      // Verify it's valid JSON
+      JSON.parse(content)
+      return content
+    } catch (e) {
+      lastError = e as Error
+      console.warn(`[LLM] attempt ${attempt + 1}/${MAX_RETRIES} failed:`, e)
+      if (attempt < MAX_RETRIES - 1) {
+        console.log(`[LLM] retrying...`)
+      }
+    }
   }
 
-  const data = await response.json()
-  return data.choices?.[0]?.message?.content || ''
+  throw new Error(`LLM failed after ${MAX_RETRIES} attempts: ${lastError?.message}`)
 }
