@@ -17,6 +17,13 @@ const NPC_PROMPT_TEMPLATE = `你是一个正在和日语初学者对话的人。
 - "npc：" 开头的对话 = 你之前说的话
 - "user：" 开头的对话 = 用户之前说的话
 
+## 语言要求（最高优先级，不可违反）
+- 你是日本人，不会说中文。无论用户用什么语言（包括中文、英文）和你说话，你都必须用日语回复。
+- "reply" 字段必须以日语为主体：绝对禁止整句使用中文、英文或任何其他语言。
+- 允许在日语句子中自然地夹杂个别外来词（如 バスケットボール、アルバイト 等外来语，或人名、品牌名等专有名词），但句子的语法结构和主体词汇必须是日语。
+- 如果想不到合适的日语表达，就用更简单的日语重新组织句子，而不是切换到其他语言。
+- 反例（禁止出现）："真的吗？太好了！我们周末可以一起打篮球。" ← 这是中文，不是 reply 该输出的内容。
+
 ## 场景
 {{sceneDescription}}
 
@@ -49,7 +56,7 @@ hint 是用户会说的话，不是你会说的话。
 
 请严格按以下 JSON 格式回复：
 {
-  "reply": "你的日语回复",
+  "reply": "你的日语回复（必须以日语为主体！禁止整句使用中文或英文）",
   "translation": "中文翻译",
   "reading": "平假名注音",
   "hint": {
@@ -65,9 +72,10 @@ hint 是用户会说的话，不是你会说的话。
 ---
 
 现在请你：
-1. 牢记你的身份设定和术语定义
-2. 根据对话历史和用户刚说的话，生成一句自然的回复
-3. 严格按照上述 JSON 格式输出，不要输出其他内容`
+1. 牢记你的身份设定、术语定义和语言要求
+2. 根据对话历史和用户刚说的话，生成一句自然的日语回复
+3. 输出前自检：reply 字段是否以日语为主体？如果整句是中文或英文，必须重写为日语后再输出
+4. 严格按照上述 JSON 格式输出，不要输出其他内容`
 
 const FIRST_MESSAGE_ADDON = `
 
@@ -79,7 +87,7 @@ const ENDING_PROMPT_ADDON = `
 目前所有需要完成的 mission 都已完成。
 请在此次回复中自然地结束会话。
 例如：找一个合理的理由和用户告别（要去上班、朋友在等、要回学校等）。
-回复中要包含告别的内容，同时将 "end" 字段设为 true。`
+回复中要包含告别的内容（告别也必须用日语），同时将 "end" 字段设为 true。`
 
 interface NPCInput {
   npcName: string
@@ -111,12 +119,31 @@ export async function getNPCReply(input: NPCInput) {
   if (input.isFirstMessage) prompt += FIRST_MESSAGE_ADDON
   if (input.allComplete) prompt += ENDING_PROMPT_ADDON
 
-  const content = await callLLM([
+  const messages = [
     { role: 'system', content: prompt },
     { role: 'user', content: '请根据以上设定生成回复。' },
-  ])
+  ]
 
-  const parsed = JSON.parse(content)
+  let content = await callLLM(messages)
+  let parsed = JSON.parse(content)
+
+  // 语言兜底：reply 若不含任何假名，大概率整句跑偏成了中文/英文
+  // （初学者对话的自然日语几乎必然带假名：助词、です・ます 结尾等）
+  // 只重试一次；若模型坚持输出全汉字句子（合法的日语），则接受，避免死循环
+  if (!/[\u3040-\u30ff]/.test(parsed.reply || '')) {
+    console.warn(`[NPC] reply has no kana, retrying once:`, parsed.reply)
+    messages.push(
+      { role: 'assistant', content },
+      {
+        role: 'user',
+        content:
+          '你的 reply 字段不含任何日语假名，很可能不是日语。请检查：如果它不是以日语为主体的句子，请重写为日语（面向初学者的自然日语几乎都会包含假名，如助词 は、が、を 或 です・ます 结尾）。如果它确实是全汉字组成的合法日语，可以保持不变。请重新输出完整的 JSON。',
+      },
+    )
+    content = await callLLM(messages)
+    parsed = JSON.parse(content)
+  }
+
   console.log(`[NPC] response:`, parsed)
 
   let audioPath: string | null = null
